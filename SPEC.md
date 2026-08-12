@@ -55,17 +55,35 @@ Legend: `[sp]` = pipeline spinner, `[ok]` = green checkmark, `[!!]` = red failed
 
 ### 2.2 MR row
 
+The row is a single horizontal strip that fills the widescreen width. Each field is its own column. Columns do not wrap; the row grows wider on larger screens and the description column absorbs the spare width. A row is one line tall for open MRs and two lines tall once the description expands.
+
+Columns, left to right:
+
+| # | Column | Content | Behavior |
+|---|--------|---------|----------|
+| 1 | Jira | `REC-1234` | Link to `{JIRA_URL}{ticket}`. Empty if no ticket in title. |
+| 2 | MR | `#1240` | Link to the MR in a new tab. |
+| 3 | Title | `Add feature X` | Link to the MR in a new tab. Truncates with ellipsis when long. |
+| 4 | Description | `Lorem ipsum dolor…` | Collapses after 50 pixels of height. Click expands in place. Absorbs spare width on widescreen. |
+| 5 | Author | avatar + `J. Doe` | Avatar then name. |
+| 6 | State | `open 2 commits` | `open`/`merged`/`draft` plus commit count. Merged rows are grayed. |
+| 7 | Age | `3d 04:12:33` | `now - created_at` for open, `merged_at - created_at` for merged. |
+| 8 | First approve | `1d 02:11` | Time to first approval. Empty if none. |
+| 9 | Pipeline | `[spinner]` / `[ok]` / `[!!]` | Spinner while running, green check when passed, red when failed. |
+| 10 | Commits | `[diffs]` | Button opens every commit diff in a new tab. |
+
+Widescreen layout (top header row, then a sample open MR and a sample merged MR):
+
 ```
-+------------------------------------------------------------------+
-| REC-1234 | #1240 | Title: Add feature X          [open 2 commits]|
-|          |       | Description: Lorem ipsum dolor sit amet, con- |
-|          |       | sectetur adipiscing elit... (collapsed 50px)  |
-|          |       | Author: J. Doe   Age: 3d 04:12:33             |
-|          |       | First approve: 1d 02:11   Pipeline: [spinner]  |
-+------------------------------------------------------------------+
++--------+-------+--------------------+-----------------------------+---------+------------+----------+---------+--------+--------+
+| Jira   | MR    | Title              | Description (coll. 50px)    | Author  | State      | Age      | 1st App | Pipe   | Commits|
++--------+-------+--------------------+-----------------------------+---------+------------+----------+---------+--------+--------+
+| REC-…  | #1240 | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | open 2comm | 3d04:12  | 1d02:11 | [sp]   | [diffs]|
+|        | #1239 | Fix bug Y          | Consectetur adipiscing…     | (av) JR | merged     | 2d01:00  | 0d05:30 | [ok]   | [diffs]|
++--------+-------+--------------------+-----------------------------+---------+------------+----------+---------+--------+--------+
 ```
 
-The Jira ticket is a separate column. The ticket links to the Jira issue. The title links to the MR in a new tab. The description collapses after 50 pixels. The commits button opens all commit diffs in new tabs.
+The Jira ticket links to the Jira issue. The title and the MR number link to the MR in a new tab. The description collapses after 50 pixels of height and expands on click. The commits button opens all commit diff links in new tabs. Merged rows render grayed out. The row never scrolls horizontally; on narrower screens the description column shrinks first.
 
 ### 2.3 Metric cell
 
@@ -131,7 +149,7 @@ The `(?)` icon shows a tooltip. The tooltip explains the metric. The tooltip exp
 
 ### 4.1 Architecture
 
-The app is a Symfony application in PHP 8.3. The app has one container. The container runs nginx, php-fpm, and cron. Supervisor starts all three processes.
+The app is a Symfony application in PHP 8.5. The app has one container. The container runs nginx, php-fpm, and cron. Supervisor starts all three processes.
 
 The app has two entry points:
 
@@ -412,7 +430,7 @@ Stage 1 — build:
 
 Stage 2 — runtime:
 
-- Base: `php:8.3-fpm-alpine`.
+- Base: `php:8.5-fpm-alpine`.
 - Install `pdo_sqlite`, `curl`, `openssl`, nginx, cron, supervisor.
 - Copy the app and the vendor directory.
 - Copy the entrypoint script.
