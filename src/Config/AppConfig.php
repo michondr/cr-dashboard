@@ -10,7 +10,6 @@ final readonly class AppConfig
     public const WINDOW_DAYS = 60;
     public const COVERAGE_WINDOW_DAYS = 30;
     public const MERGED_WINDOW_DAYS = 30;
-    public const SYNC_INTERVAL_SECONDS = 900;
     public const LOCK_TIMEOUT_SECONDS = 1800;
 
     public function __construct(

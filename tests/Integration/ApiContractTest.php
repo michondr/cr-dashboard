@@ -90,7 +90,7 @@ final class ApiContractTest extends TestCase
         self::assertGreaterThanOrEqual(30, $meta['cache_age_seconds']);
         self::assertLessThan(60, $meta['cache_age_seconds']);
         self::assertIsString($meta['last_sync_at']);
-        self::assertIsString($meta['next_sync_at']);
+        self::assertArrayNotHasKey('next_sync_at', $meta);
 
         self::assertArrayHasKey('users', $payload);
         $users = $payload['users'];

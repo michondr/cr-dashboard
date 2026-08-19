@@ -78,7 +78,6 @@ final class ApiBuilder
             'generated_at' => $this->iso($now),
             'cache_age_seconds' => $cacheAge,
             'last_sync_at' => $lastSync === null ? null : $this->iso($lastSync),
-            'next_sync_at' => $lastSync === null ? null : $this->iso($lastSync + AppConfig::SYNC_INTERVAL_SECONDS),
             'last_rank_at' => $lastRank === null ? null : $this->iso($lastRank),
             'next_rank_at' => $lastRank === null ? null : $this->iso($lastRank + self::RANK_INTERVAL_SECONDS),
         ];

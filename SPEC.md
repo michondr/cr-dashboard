@@ -384,8 +384,7 @@ GitLab API rate limit.
     "coverage_window_days": 30,
     "generated_at": "2026-08-11T12:00:00Z",
     "cache_age_seconds": 3,
-    "last_sync_at": "2026-08-11T11:45:00Z",
-    "next_sync_at": "2026-08-11T12:00:00Z"
+    "last_sync_at": "2026-08-11T11:45:00Z"
   },
   "users": [
     {"id": 1, "name": "Jane Doe", "username": "jdoe", "avatar_url": "..."}
@@ -560,7 +559,7 @@ The pipeline indicator comes from `mrs[].pipeline.indicator` (see Metric 12).
 
 The Jira ticket column shows `mrs[].jira_ticket`, extracted by the backend with the regex `^([A-Z][A-Z0-9]+-\d+)`. The ticket links to `{JIRA_URL}{ticket}`.
 
-The header shows the sync status from `meta`: `last_sync_at` and `next_sync_at`, formatted in the browser's local time.
+The header shows the sync status from `meta.last_sync_at`, formatted in the browser's local time.
 
 The backend computes all thresholds and day boundaries in UTC; the frontend renders timestamps in the browser's local time.
 
@@ -652,7 +651,7 @@ Backend tests (PHPUnit):
 - Sync logic tests. A mock GitLab client returns fixtures. Tests assert the SQLite state after sync, including wipe-and-reinsert, append-only commits, and the running-pipeline refresh.
 - Pagination test. A fixture with multiple pages is followed to completion and all rows are stored.
 - Retention test. MRs merged/closed longer than `RETENTION_DAYS` are pruned together with their sub-resources.
-- API contract test. Tests that `/api/data` returns the documented computed shape, including the `mean`/`median` pair on duration metrics and `last_sync_at`/`next_sync_at`.
+- API contract test. Tests that `/api/data` returns the documented computed shape, including the `mean`/`median` pair on duration metrics and `last_sync_at`.
 
 Frontend tests:
 
