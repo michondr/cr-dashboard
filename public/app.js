@@ -123,6 +123,7 @@ let usersById = new Map();
 let charts = [];
 let chartData = null;
 let colorByUserId = new Map();
+let lastRenderedFingerprint = null;
 
 // A single global color mapping, assigned once per data load from the same
 // ordering as the user dropdown (mr_count DESC, name ASC). Keeping the
@@ -909,6 +910,18 @@ async function loadData(bucket) {
         }
         const data = await response.json();
         state.jiraUrl = data.meta.jira_url || '';
+
+        // The 60s poll re-fetches on the same bucket/user filter; when nothing
+        // changed server-side, skip the rebuild so open tooltips/zoom aren't
+        // yanked out from under the cursor. A changed bucket or user filter
+        // always has a different fingerprint, so it always rerenders.
+        const fingerprint = `${data.meta.last_sync_at}|${bucket}|${state.userId || ''}`;
+        if (fingerprint === lastRenderedFingerprint) {
+            chartData = data;
+            return;
+        }
+        lastRenderedFingerprint = fingerprint;
+
         usersById = new Map((data.users || []).map((user) => [String(user.id), user]));
         buildColorMap(data.users);
         chartData = data;
@@ -966,4 +979,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadData('day');
     setInterval(() => loadData(state.bucket), REFRESH_MS);
+
+    // Exposed for the Playwright test that verifies unchanged polls skip the
+    // rebuild; not used by any runtime code path.
+    window.__crDashboardReload = () => loadData(state.bucket);
 });

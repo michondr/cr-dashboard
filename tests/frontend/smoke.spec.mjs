@@ -263,6 +263,37 @@ test('hovering a chart shows a toolbar with each avatar and its value at that ti
     expect(await tip.evaluate((el) => el.hidden)).toBe(true);
 });
 
+test('a poll with unchanged data skips the rebuild', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+    await page.waitForTimeout(500);
+
+    // Open a chart tooltip by hovering, then trigger a reload identical to
+    // the 60s poll (same bucket/user, same meta.last_sync_at fixture). If the
+    // charts were rebuilt, uPlot would tear down and recreate the canvas
+    // (and the tooltip would lose its cursor-driven state); the canvas node
+    // identity is the simplest signal that no rebuild happened.
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const box = await coverage.locator('.chart-wrap').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(200);
+    await expect(coverage.locator('.chart-tip')).toBeVisible();
+
+    await page.evaluate(() => {
+        document.querySelector('.cell canvas').dataset.marker = 'before-reload';
+    });
+
+    await page.evaluate(() => window.__crDashboardReload());
+    await page.waitForTimeout(300);
+
+    expect(
+        await page.evaluate(() => document.querySelector('.cell canvas').dataset.marker)
+    ).toBe('before-reload');
+    // The tooltip the cursor was over is still shown (its uPlot instance was
+    // never torn down and rebuilt).
+    await expect(coverage.locator('.chart-tip')).toBeVisible();
+});
+
 test('a user keeps the same color across every chart they appear in', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.cell');
