@@ -27,6 +27,9 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
         await page.locator('.col-approvers .avatar, .col-approvers .avatar-fallback').count()
     ).toBeGreaterThanOrEqual(1);
 
+    // An open MR with enough approvals and a green pipeline is "ready".
+    expect(await page.locator('.col-state.state-ready').count()).toBeGreaterThanOrEqual(1);
+
     // All nine metric cells render.
     expect(await page.locator('.cell').count()).toBe(9);
 

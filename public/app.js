@@ -299,16 +299,19 @@ function renderMrRow(mr, dimmed) {
     row.appendChild(author);
 
     const stateCell = el('span', 'col-state');
-    const stateText = `${mr.state} ${mr.commit_count} commit${mr.commit_count === 1 ? '' : 's'}`;
-    stateCell.textContent = stateText;
+    const ready = mr.state === 'opened'
+        && !mr.draft
+        && Array.isArray(mr.approvers)
+        && mr.approvers.length >= (state.requiredApprovals || 0)
+        && mr.pipeline && mr.pipeline.indicator === 'check';
+    const stateLabel = ready ? 'ready' : mr.state;
+    stateCell.textContent = `${stateLabel} ${mr.commit_count} commit${mr.commit_count === 1 ? '' : 's'}`;
+    if (ready) {
+        stateCell.classList.add('state-ready');
+    }
     if (mr.draft) {
         const badge = el('span', 'badge');
         badge.textContent = 'draft';
-        stateCell.appendChild(badge);
-    }
-    if (mr.state === 'closed') {
-        const badge = el('span', 'badge');
-        badge.textContent = 'closed';
         stateCell.appendChild(badge);
     }
     row.appendChild(stateCell);
@@ -637,6 +640,7 @@ async function loadData(bucket) {
         }
         const data = await response.json();
         state.jiraUrl = data.meta.jira_url || '';
+        state.requiredApprovals = data.meta.required_approvals || 0;
         usersById = new Map((data.users || []).map((user) => [String(user.id), user]));
         chartData = data;
         renderAll(data);

@@ -186,6 +186,11 @@ body {
     color: var(--text-dim);
 }
 
+.col-state.state-ready {
+    color: var(--ok);
+    font-weight: 600;
+}
+
 .stale-link {
     margin: 6px 16px;
     padding: 4px 10px;
