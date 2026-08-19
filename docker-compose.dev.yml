@@ -6,14 +6,15 @@
 # Designed to run on the same host as the production container and SHARE the
 # production database, so the preview shows the real data:
 #
-#   docker compose -f docker-compose.dev.yml up -d --build
-#   docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync --full   # first run / fresh volume
+#   docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d --build
+#   docker compose -f docker-compose.dev.yml -f docker-compose.override.yml exec cr-dashboard php /app/bin/console app:sync --full   # first run / fresh volume
 #
-# Standalone on purpose: plain `docker compose up` would also auto-load
-# docker-compose.override.yml (Traefik routing + fixed container_name
-# company-cr-dashboard), which does not apply to a dev container and would
-# collide with the running production one. This file is loaded only when named
-# explicitly with -f.
+# The override is loaded alongside so the dev container is routed through the
+# shared Traefik and served at cr.michondr.space, exactly like production.
+# Both stacks share the fixed container_name company-cr-dashboard, so the
+# production stack must be stopped first:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml down
 services:
   cr-dashboard:
     image: cr-dashboard:dev

@@ -1,4 +1,7 @@
 {
+	# The mercure directive is an un-ordered handler; v0.15 requires its
+	# explicit position in the global order or Caddy refuses the config.
+	order mercure after encode
 	auto_https off
 	admin off
 }

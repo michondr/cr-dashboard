@@ -31,7 +31,9 @@ RUN apk add --no-cache \
 # Runs as its own supervisord program (docker/supervisord.conf), fronted by
 # nginx at /.well-known/mercure so no extra port is exposed.
 ARG MERCURE_VERSION=v0.15.9
-RUN curl -fsSL "https://github.com/dunglas/mercure/releases/download/${MERCURE_VERSION}/mercure_${MERCURE_VERSION#v}_Linux_x86_64.tar.gz" \
+# The release asset name does not embed the version (mercure_Linux_x86_64.tar.gz),
+# only the tag path does.
+RUN curl -fsSL "https://github.com/dunglas/mercure/releases/download/${MERCURE_VERSION}/mercure_Linux_x86_64.tar.gz" \
         -o /tmp/mercure.tar.gz \
     && tar -xzf /tmp/mercure.tar.gz -C /usr/local/bin mercure \
     && chmod +x /usr/local/bin/mercure \
