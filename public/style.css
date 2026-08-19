@@ -662,3 +662,41 @@ body {
     border-bottom: 1px solid var(--fail);
     color: var(--fail);
 }
+
+/* Narrow screens (phones/tablets): the MR table is wider than the viewport,
+   so the panel scrolls both axes and the header + rows are sized to the full
+   table width (width: max-content, title capped). Rows keep their border and
+   the header stays aligned while scrolling, instead of the columns spilling
+   past a container-width box whose border stops at the screen edge. The
+   header sticks to the top of the panel while the rows scroll vertically.
+
+   This block is last in the file so its rules win over the base rules above. */
+@media (max-width: 1024px) {
+    .mr-panel {
+        overflow: auto;
+    }
+
+    .mr-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--panel);
+        flex: none;
+    }
+
+    .mr-list {
+        overflow: visible;
+        flex: none;
+    }
+
+    .mr-header,
+    .mr-row,
+    .mr-list {
+        width: max-content;
+    }
+
+    .mr-header,
+    .mr-row {
+        grid-template-columns: 60px 110px minmax(220px, 360px) minmax(90px, 140px) 150px 288px 110px 100px 120px 44px 90px;
+    }
+}

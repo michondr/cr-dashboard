@@ -262,3 +262,44 @@ test('hovering a chart shows a toolbar with each avatar and its value at that ti
     await page.waitForTimeout(200);
     expect(await tip.evaluate((el) => el.hidden)).toBe(true);
 });
+
+test('on a phone the MR table scrolls as one unit and row borders span every column', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    // The table is wider than the viewport and scrolls at the panel level,
+    // with the header sticking to the top while rows scroll vertically.
+    const panel = page.locator('.mr-panel');
+    const dims = await panel.evaluate((el) => ({
+        overflowX: getComputedStyle(el).overflowX,
+        scrollable: el.scrollWidth > el.clientWidth,
+    }));
+    expect(dims.overflowX).toBe('auto');
+    expect(dims.scrollable).toBe(true);
+    expect(await page.locator('.mr-header').evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+
+    // Rows and the header span the full table width, so a row's bottom border
+    // reaches the last column instead of stopping at the screen edge.
+    const widths = await page.locator('.mr-row:visible').first().evaluate((row) => ({
+        row: row.getBoundingClientRect().width,
+        header: document.querySelector('.mr-header').getBoundingClientRect().width,
+    }));
+    expect(widths.row).toBeGreaterThan(600);
+    expect(widths.row).toBe(widths.header);
+
+    // Scrolling the panel right keeps the header and rows aligned as one table.
+    await panel.evaluate((el) => {
+        el.scrollLeft = 800;
+    });
+    await page.waitForTimeout(50);
+    const aligned = await page.evaluate(() => {
+        const header = document.querySelector('.mr-header').getBoundingClientRect().left;
+        const row = [...document.querySelectorAll('.mr-row')]
+            .find((el) => el.getBoundingClientRect().width > 0)
+            .getBoundingClientRect().left;
+
+        return { header, row };
+    });
+    expect(aligned.row).toBe(aligned.header);
+});
