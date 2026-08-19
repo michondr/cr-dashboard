@@ -16,6 +16,7 @@ use function count;
 use function gmdate;
 use function rtrim;
 use function sprintf;
+use function usort;
 
 use const DATE_ATOM;
 
@@ -136,7 +137,10 @@ final class ApiBuilder
      *   time_to_first_approval_seconds: int|null,
      *   commit_count: int,
      *   commit_diff_urls: list<string>,
-     *   pipeline: array{status: string, indicator: string, tint: string|null}
+     *   pipeline: array{status: string, indicator: string, tint: string|null},
+     *   approvers: list<array{
+     *     id: int, name: string, username: string, avatar_url: string|null, approved_at: string|null
+     *   }>
      * }
      */
     private function buildMrRow(array $mr, array $projectPaths, Dataset $dataset, int $now): array
@@ -187,6 +191,7 @@ final class ApiBuilder
             'commit_count' => count($commitShas),
             'commit_diff_urls' => $commitDiffUrls,
             'pipeline' => $this->pipelineFor($dataset, $id),
+            'approvers' => $this->approversFor($dataset, $id),
         ];
     }
 
@@ -223,6 +228,42 @@ final class ApiBuilder
         }
 
         return $first === null ? null : $first - $createdAt;
+    }
+
+    /**
+     * Approvers of an MR, earliest approval first, with their avatar. Serves the
+     * first-approver avatar, the approvers column, and the "ready" state.
+     *
+     * @return list<array{id: int, name: string, username: string, avatar_url: string|null, approved_at: string|null}>
+     */
+    private function approversFor(Dataset $dataset, int $mrId): array
+    {
+        $approvals = [];
+        foreach ($dataset->approvals as $approval) {
+            if ((int) $approval['mr_id'] !== $mrId) {
+                continue;
+            }
+            $approvals[] = [
+                'user_id' => (int) $approval['user_id'],
+                'created_at' => (int) $approval['created_at'],
+            ];
+        }
+
+        usort($approvals, static fn (array $a, array $b): int => $a['created_at'] <=> $b['created_at']);
+
+        $approvers = [];
+        foreach ($approvals as $approval) {
+            $user = $this->findUser($dataset, $approval['user_id']);
+            $approvers[] = [
+                'id' => $user['id'],
+                'name' => $user['name'],
+                'username' => $user['username'],
+                'avatar_url' => $user['avatar_url'],
+                'approved_at' => $this->iso($approval['created_at']),
+            ];
+        }
+
+        return $approvers;
     }
 
     /**

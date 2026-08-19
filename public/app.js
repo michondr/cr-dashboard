@@ -318,9 +318,15 @@ function renderMrRow(mr, dimmed) {
     row.appendChild(age);
 
     const first = el('span', 'col-first');
-    first.textContent = mr.time_to_first_approval_seconds == null
-        ? ''
-        : formatShortDuration(mr.time_to_first_approval_seconds);
+    if (mr.approvers && mr.approvers.length > 0) {
+        const firstApprover = mr.approvers[0];
+        renderAvatar(first, firstApprover.name, firstApprover.avatar_url);
+    }
+    first.appendChild(document.createTextNode(
+        mr.time_to_first_approval_seconds == null
+            ? ''
+            : formatShortDuration(mr.time_to_first_approval_seconds)
+    ));
     row.appendChild(first);
 
     const pipe = el('span', 'col-pipe');

@@ -5,10 +5,10 @@
         "window_days": 60,
         "coverage_window_days": 30,
         "jira_url": "https://jira.example.test/browse/",
-        "generated_at": "2026-08-19T14:28:14+00:00",
+        "generated_at": "2026-08-19T14:31:39+00:00",
         "cache_age_seconds": 0,
-        "last_sync_at": "2026-08-19T14:28:14+00:00",
-        "next_sync_at": "2026-08-19T14:43:14+00:00"
+        "last_sync_at": "2026-08-19T14:31:39+00:00",
+        "next_sync_at": "2026-08-19T14:46:39+00:00"
     },
     "users": [
         {
@@ -47,7 +47,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-17T14:28:14+00:00",
+            "created_at": "2026-08-17T14:31:39+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/201",
@@ -61,7 +61,16 @@
                 "status": "success",
                 "indicator": "check",
                 "tint": null
-            }
+            },
+            "approvers": [
+                {
+                    "id": 2,
+                    "name": "John Roe",
+                    "username": "jroe",
+                    "avatar_url": null,
+                    "approved_at": "2026-08-18T14:31:39+00:00"
+                }
+            ]
         },
         {
             "id": 202,
@@ -79,7 +88,7 @@
             "state": "opened",
             "draft": false,
             "stale": true,
-            "created_at": "2026-06-05T14:28:14+00:00",
+            "created_at": "2026-06-05T14:31:39+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/202",
@@ -93,7 +102,8 @@
                 "status": "",
                 "indicator": "none",
                 "tint": null
-            }
+            },
+            "approvers": []
         },
         {
             "id": 204,
@@ -111,7 +121,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-18T14:28:14+00:00",
+            "created_at": "2026-08-18T14:31:39+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/204",
@@ -125,7 +135,8 @@
                 "status": "running",
                 "indicator": "spinner",
                 "tint": "warn"
-            }
+            },
+            "approvers": []
         },
         {
             "id": 205,
@@ -143,7 +154,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-16T14:28:14+00:00",
+            "created_at": "2026-08-16T14:31:39+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/205",
@@ -155,7 +166,8 @@
                 "status": "",
                 "indicator": "none",
                 "tint": null
-            }
+            },
+            "approvers": []
         },
         {
             "id": 206,
@@ -173,7 +185,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-14T14:28:14+00:00",
+            "created_at": "2026-08-14T14:31:39+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/206",
@@ -185,7 +197,8 @@
                 "status": "",
                 "indicator": "none",
                 "tint": null
-            }
+            },
+            "approvers": []
         },
         {
             "id": 207,
@@ -203,7 +216,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-11T14:28:14+00:00",
+            "created_at": "2026-08-11T14:31:39+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/207",
@@ -215,7 +228,8 @@
                 "status": "",
                 "indicator": "none",
                 "tint": null
-            }
+            },
+            "approvers": []
         }
     ],
     "metrics": {

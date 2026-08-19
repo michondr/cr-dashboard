@@ -116,6 +116,15 @@ final class ApiContractTest extends TestCase
         self::assertIsArray($pipeline);
         self::assertSame('none', $pipeline['indicator']);
 
+        $approvers = $openMr['approvers'];
+        self::assertIsArray($approvers);
+        self::assertCount(1, $approvers);
+        $firstApprover = $approvers[0];
+        self::assertIsArray($firstApprover);
+        self::assertSame(2, $firstApprover['id']);
+        self::assertArrayHasKey('avatar_url', $firstApprover);
+        self::assertIsString($firstApprover['approved_at']);
+
         self::assertArrayHasKey('metrics', $payload);
         $metrics = $payload['metrics'];
         self::assertIsArray($metrics);
