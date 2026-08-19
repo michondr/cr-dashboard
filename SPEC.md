@@ -64,7 +64,7 @@ Columns, left to right:
 | # | Column | Content | Behavior |
 |---|--------|---------|----------|
 | 1 | Jira | `REC-1234` | Link to `{JIRA_URL}{ticket}`. Empty if no ticket in title. |
-| 2 | Title | `Add feature X` | Link to the MR in a new tab. Truncates with ellipsis when long. |
+| 2 | Title | `Add feature X` | Link to the MR in a new tab, with the Jira ticket prefix stripped. Truncates with ellipsis when long. |
 | 3 | Description | `Lorem ipsum dolor…` | One line with an ellipsis when long. Click expands in place to the full text. Absorbs spare width on widescreen. |
 | 4 | Author | avatar + `J. Doe` | Avatar then name. |
 | 5 | Status | `draft` / `needs rebase` / `stale 💩` / `unresolved discussion 📝` / `approved` / `ready ✅` | One badge per condition that applies (all of them, not a single winner): `draft` when the MR is a draft; `needs rebase` when GitLab reports `has_conflicts` or `merge_status` is `cannot_be_merged`; `stale 💩` when open older than `STALE_DAYS`; `unresolved discussion 📝` when at least one resolvable discussion thread is unresolved; `approved` when approvals ≥ `REQUIRED_APPROVALS` (hidden when `ready` also applies); `ready ✅` when the MR is approved, its latest pipeline is green (`indicator: check`) and there are no unresolved discussions. Empty when none apply. Badges wrap onto a second row when several apply (at most two rows per cell), so the row never grows taller. The list shows open MRs only — merged/closed MRs are kept in the cache for the metrics but hidden from the list. |
@@ -86,7 +86,7 @@ Widescreen layout (top header row, then sample open MRs):
 +--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
 ```
 
-The Jira ticket links to the Jira issue. The title links to the MR in a new tab. The description shows one line with an ellipsis when long and expands to the full text on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; status badges show per column 5. The row never scrolls horizontally; on narrower screens the description column shrinks first.
+The Jira ticket links to the Jira issue. The title links to the MR in a new tab with the Jira ticket prefix stripped. The description shows one line with an ellipsis when long and expands to the full text on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; status badges show per column 5. The row never scrolls horizontally; on narrower screens the description column shrinks first.
 
 ### 2.3 My view filter
 

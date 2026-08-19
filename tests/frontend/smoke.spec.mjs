@@ -47,6 +47,11 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     );
     expect(badgeCounts.some((n) => n >= 2)).toBe(true);
 
+    // The Jira ticket prefix is stripped from the title text (it stays in the
+    // Jira column).
+    const titles = await page.locator('.col-title a').allTextContents();
+    expect(titles.every((t) => !/^[A-Z][A-Z0-9]+-\d+/.test(t))).toBe(true);
+
     // All nine metric cells render.
     expect(await page.locator('.cell').count()).toBe(9);
 

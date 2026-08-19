@@ -304,6 +304,17 @@ function renderPipeline(p) {
     return cell;
 }
 
+function titleWithoutTicket(mr) {
+    const title = mr.title || '';
+    const ticket = mr.jira_ticket;
+    if (!ticket || !title.startsWith(ticket)) {
+        return title;
+    }
+    const rest = title.slice(ticket.length).replace(/^\s*[-–:]\s*/, '');
+
+    return rest || title;
+}
+
 function renderMrRow(mr, dimmed) {
     const row = el('div', 'mr-row');
     if (dimmed) {
@@ -324,7 +335,7 @@ function renderMrRow(mr, dimmed) {
     const titleLink = el('a');
     titleLink.href = mr.web_url;
     titleLink.target = '_blank';
-    titleLink.textContent = mr.title;
+    titleLink.textContent = titleWithoutTicket(mr);
     title.appendChild(titleLink);
     row.appendChild(title);
 
