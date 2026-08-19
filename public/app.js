@@ -183,6 +183,26 @@ function refreshProgressRow(mrId) {
 }
 
 function handleRefreshEvent(payload) {
+    if (payload.type === 'cycle_started') {
+        // Follow-up F1: mark every row the worker just queued so the queue
+        // order is visible before the first progress event for it arrives.
+        const queuedIds = new Set((payload.mr_ids || []).map(String));
+        for (const row of document.querySelectorAll('.mr-row')) {
+            row.classList.toggle('refresh-queued', queuedIds.has(row.dataset.mrId));
+        }
+
+        return;
+    }
+
+    if (payload.type === 'cycle_done') {
+        for (const row of document.querySelectorAll('.refresh-queued, .refresh-fetching')) {
+            row.classList.remove('refresh-queued', 'refresh-fetching');
+            row.style.removeProperty('--refresh-progress');
+        }
+
+        return;
+    }
+
     if (payload.type === 'progress') {
         const row = refreshProgressRow(payload.mr_id);
         if (row) {

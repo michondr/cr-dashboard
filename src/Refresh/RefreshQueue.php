@@ -6,6 +6,7 @@ namespace App\Refresh;
 
 use App\Storage\Database;
 
+use function array_map;
 use function usort;
 
 /**
@@ -138,6 +139,39 @@ final class RefreshQueue
         });
 
         return ['mr_id' => (int) $rows[0]['mr_id'], 'is_new' => (bool) $rows[0]['is_new']];
+    }
+
+    /**
+     * Snapshot of every currently-queued job's mr_id, ordered exactly as
+     * `nextQueuedJob()` would pop them (used to broadcast queue membership
+     * on `cycle_started` — see docs/feature-sse-refresh.md follow-up F1).
+     *
+     * @return list<int>
+     */
+    public function orderedQueuedMrIds(null|int $userId): array
+    {
+        $rows = $this->database->query(
+            "SELECT rq.mr_id AS mr_id, rq.is_new AS is_new,
+                    COALESCE(mr.author_id, -1) AS author_id,
+                    COALESCE(mr.updated_at, rq.enqueued_at) AS updated_at,
+                    EXISTS(SELECT 1 FROM approvals a WHERE a.mr_id = rq.mr_id AND a.user_id = ?) AS approved_by_user
+             FROM refresh_queue rq
+             LEFT JOIN merge_requests mr ON mr.id = rq.mr_id
+             WHERE rq.state = 'queued'",
+            [$userId ?? 0],
+        );
+
+        usort($rows, function (array $a, array $b) use ($userId): int {
+            $rankA = $this->rank($a, $userId);
+            $rankB = $this->rank($b, $userId);
+            if ($rankA !== $rankB) {
+                return $rankA <=> $rankB;
+            }
+
+            return (int) $b['updated_at'] <=> (int) $a['updated_at'];
+        });
+
+        return array_map(static fn (array $row): int => (int) $row['mr_id'], $rows);
     }
 
     public function markFetching(int $mrId): void

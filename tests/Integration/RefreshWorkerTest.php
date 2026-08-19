@@ -113,6 +113,26 @@ final class RefreshWorkerTest extends TestCase
         self::assertTrue($job['is_new']);
     }
 
+    public function testCycleStartedBroadcastsTheOrderedQueuedMrIds(): void
+    {
+        $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, '2026-08-01T09:00:00+00:00'),
+            $this->mr(202, '2026-08-05T09:00:00+00:00'),
+        ];
+
+        $this->queue->requestCycle(1000, null);
+        $this->worker->tick(1000);
+
+        $cycleStarted = array_values(array_filter(
+            $this->hub->published,
+            static fn (array $event): bool => $event['topic'] === 'refresh'
+                && $event['data']['type'] === 'cycle_started',
+        ));
+        self::assertCount(1, $cycleStarted);
+        self::assertSame([202, 101], $cycleStarted[0]['data']['mr_ids']);
+    }
+
     public function testClosedMrsSurfacedByTheListCallAreRemovedFromTheCache(): void
     {
         // Defensive parity with Synchronizer::incremental(): the list call is

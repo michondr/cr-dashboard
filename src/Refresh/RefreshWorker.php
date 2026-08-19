@@ -91,7 +91,11 @@ final class RefreshWorker
             $this->queue->enqueue($id, $isNew, $now);
         }
 
-        $this->publish('refresh', ['type' => 'cycle_started', 'total' => $this->queue->totalCount()]);
+        $this->publish('refresh', [
+            'type' => 'cycle_started',
+            'total' => $this->queue->totalCount(),
+            'mr_ids' => $this->queue->orderedQueuedMrIds($userId),
+        ]);
 
         return true;
     }

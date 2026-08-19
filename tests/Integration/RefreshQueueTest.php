@@ -111,6 +111,32 @@ final class RefreshQueueTest extends TestCase
         self::assertNull($this->queue->nextQueuedJob(1));
     }
 
+    public function testOrderedQueuedMrIdsMatchesTheNextQueuedJobPopOrderWithoutConsumingTheQueue(): void
+    {
+        $this->insertUser(1, 'Alice');
+        $this->insertUser(2, 'Bob');
+        $this->insertMr(101, 1, 100);
+        $this->insertMr(102, 2, 200);
+        $this->insertMr(103, 2, 300);
+        $this->insertMr(104, 2, 400);
+        $this->database->execute(
+            'INSERT INTO approvals (mr_id, user_id, created_at) VALUES (103, 1, 1)',
+        );
+
+        $this->queue->beginCycle(1000, 1);
+        $this->queue->enqueue(102, false, 1000);
+        $this->queue->enqueue(103, false, 1000);
+        $this->queue->enqueue(104, true, 1000);
+        $this->queue->enqueue(101, false, 1000);
+
+        self::assertSame([104, 101, 102, 103], $this->queue->orderedQueuedMrIds(1));
+
+        // A snapshot, not a pop: the queue is untouched and still poppable in the same order.
+        $job = $this->queue->nextQueuedJob(1);
+        self::assertNotNull($job);
+        self::assertSame(104, $job['mr_id']);
+    }
+
     public function testStatusReportsTotalAndDoneCounts(): void
     {
         $this->insertUser(1, 'Alice');

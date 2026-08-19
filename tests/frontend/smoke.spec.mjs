@@ -175,6 +175,28 @@ test('SSE refresh events fill a row\'s progress and clear it again on completion
         .toBe('');
 });
 
+test('cycle_started marks queued rows and cycle_done clears any leftovers', async ({ page, request }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    const queuedRow = page.locator('.mr-row[data-mr-id="201"]');
+    const otherRow = page.locator('.mr-row[data-mr-id="202"]');
+    await expect(queuedRow).toHaveCount(1);
+    await expect(otherRow).toHaveCount(1);
+
+    // Give the EventSource a moment to connect before priming events.
+    await page.waitForTimeout(300);
+
+    await request.post('/__test/sse', {
+        data: { type: 'cycle_started', total: 1, mr_ids: [201] },
+    });
+    await expect(queuedRow).toHaveClass(/refresh-queued/);
+    await expect(otherRow).not.toHaveClass(/refresh-queued/);
+
+    await request.post('/__test/sse', { data: { type: 'cycle_done', total: 1, done: 1 } });
+    await expect(queuedRow).not.toHaveClass(/refresh-queued/);
+});
+
 test('the topbar shows a connected-users indicator with a rate-limit tooltip', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');
