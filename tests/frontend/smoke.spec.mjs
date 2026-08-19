@@ -69,6 +69,10 @@ test('my view filter splits the list into authored and awaiting review', async (
     // The bookmarked filter is reflected in the select, and Clear is visible.
     expect(await page.locator('#user-filter-select').inputValue()).toBe('1');
     await expect(page.locator('#user-clear')).toBeVisible();
+
+    // Stale MRs are not waiting on anyone's review: none appear in the
+    // "awaiting my review" list.
+    expect(await page.locator('.mr-section').nth(1).locator('.status-stale').count()).toBe(0);
 });
 
 test('chart cells mark each line with an avatar on its last point', async ({ page }) => {

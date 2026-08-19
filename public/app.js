@@ -434,7 +434,9 @@ function renderMrList(data) {
         for (const mr of data.mrs) {
             if (String(mr.author.id) === state.userId) {
                 mine.push(mr);
-            } else {
+            } else if (!mr.stale) {
+                // Stale MRs are not waiting on anyone's review; keep them out
+                // of the "awaiting my review" list.
                 toReview.push(mr);
             }
         }

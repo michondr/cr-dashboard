@@ -96,7 +96,7 @@ A "My view" `<select>` in the header (right side) lists every known user (`Name 
 With a user selected the MR list splits into two labelled tables, separated by a heading bar:
 
 1. **Authored by me** — open MRs whose author is the selected user.
-2. **Awaiting my review** — open MRs not authored by the selected user that they have not yet approved (proxy for "needs my CR"; reviewer assignments are not stored).
+2. **Awaiting my review** — open MRs not authored by the selected user that they have not yet approved (proxy for "needs my CR"; reviewer assignments are not stored). Stale MRs are excluded here — they are not waiting on anyone's review.
 
 MRs the selected user already approved are excluded. The metrics panel is unaffected (it stays a team-wide view). With no filter the list is the single open-MR list with the stale link as above.
 
