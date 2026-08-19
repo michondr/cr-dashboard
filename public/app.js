@@ -259,6 +259,25 @@ function avatarImage(user, className) {
     return fallback;
 }
 
+function formatMetricValue(unit, value) {
+    if (value == null) {
+        return '—';
+    }
+    if (unit === 'seconds') {
+        return formatShortDuration(value);
+    }
+    if (unit === 'percent') {
+        return `${Number(value.toFixed(1))}%`;
+    }
+
+    return String(Math.round(value));
+}
+
+// Bucket keys are already human-readable ("2026-08-19" or "2026-08-19 14:00").
+function formatBucketLabel(key) {
+    return key.replace(' ', ' · ');
+}
+
 function renderPipeline(p) {
     const cell = el('span', 'pipe-cell');
     if (!p || p.indicator === 'none') {
@@ -559,6 +578,57 @@ function updateAvatars(u, wrap, persons, unit) {
     });
 }
 
+// Hover toolbar: for the bucket under the cursor, list every person's avatar,
+// name, and value at that point in time. Positioned near the cursor and
+// clamped inside the chart so it never spills out of the cell.
+function updateChartTooltip(u, wrap, tip, persons, unit) {
+    const idx = u.cursor && u.cursor.idx;
+
+    if (idx == null || u.cursor.left < 0) {
+        tip.hidden = true;
+
+        return;
+    }
+    tip.hidden = false;
+    tip.textContent = '';
+
+    const header = el('div', 'tip-head');
+    header.textContent = formatBucketLabel(persons[0][1].buckets[idx]);
+    tip.appendChild(header);
+
+    persons.forEach(([id, series], index) => {
+        const values = pickSeries(series, getMode());
+        const user = usersById.get(id) || { name: id };
+
+        const row = el('div', 'tip-row');
+        row.style.borderLeftColor = COLORS[index % COLORS.length];
+        row.appendChild(avatarImage(user, 'tip-avatar'));
+        const name = el('span', 'tip-name');
+        name.textContent = user.name || id;
+        row.appendChild(name);
+        const val = el('span', 'tip-val');
+        val.textContent = formatMetricValue(unit, values[idx]);
+        row.appendChild(val);
+        tip.appendChild(row);
+    });
+
+    const pad = 12;
+    const ww = wrap.clientWidth;
+    const wh = wrap.clientHeight;
+    let left = u.cursor.left + pad;
+    let top = u.cursor.top + pad;
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    if (left + tw > ww) {
+        left = u.cursor.left - pad - tw;
+    }
+    if (top + th > wh) {
+        top = wh - th - 2;
+    }
+    tip.style.left = `${Math.max(2, left)}px`;
+    tip.style.top = `${Math.max(2, top)}px`;
+}
+
 function createChart(wrap, key, meta, data) {
     const metric = data.metrics[key];
     if (!metric) {
@@ -578,11 +648,14 @@ function createChart(wrap, key, meta, data) {
     const mode = getMode();
     const yData = persons.map(([, series]) => pickSeries(series, mode));
 
+    const tip = el('div', 'chart-tip');
+    tip.hidden = true;
+
     const opts = {
         width: wrap.clientWidth || 320,
         height: 170,
         legend: { show: false },
-        cursor: { drag: 'x' },
+        cursor: { drag: 'x', points: { show: false } },
         select: { show: true },
         scales: { x: { time: true } },
         axes: [
@@ -603,10 +676,12 @@ function createChart(wrap, key, meta, data) {
         hooks: {
             draw: [(u) => updateAvatars(u, wrap, persons, meta.unit)],
             setSelect: [(u) => handleZoom(u, wrap)],
+            setCursor: [(u) => updateChartTooltip(u, wrap, tip, persons, meta.unit)],
         },
     };
 
     const u = new uPlot(opts, [xData, ...yData], wrap);
+    wrap.appendChild(tip);
 
     const resizeObserver = new ResizeObserver(() => {
         const width = wrap.clientWidth;

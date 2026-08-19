@@ -85,3 +85,34 @@ test('chart cells mark each line with an avatar on its last point', async ({ pag
         expect(kind.tag === 'IMG' ? kind.hasSrc : true).toBe(true);
     }
 });
+
+test('hovering a chart shows a toolbar with each avatar and its value at that time', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell');
+    await page.waitForTimeout(500);
+
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const tip = coverage.locator('.chart-tip');
+    expect(await tip.evaluate((el) => el.hidden)).toBe(true);
+
+    // Move the cursor onto the chart: a toolbar appears with a date header and
+    // one row per person, each carrying an avatar and a value.
+    const box = await coverage.locator('.chart-wrap').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(200);
+    expect(await tip.evaluate((el) => el.hidden)).toBe(false);
+    expect(await tip.locator('.tip-head').textContent()).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    const rows = tip.locator('.tip-row');
+    expect(await rows.count()).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < await rows.count(); i++) {
+        const row = rows.nth(i);
+        expect(await row.locator('.tip-avatar, .tip-avatar-fallback').count()).toBe(1);
+        expect(await row.locator('.tip-name').textContent()).toBeTruthy();
+        expect(await row.locator('.tip-val').textContent()).toBeTruthy();
+    }
+
+    // Leaving the chart hides the toolbar again.
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(200);
+    expect(await tip.evaluate((el) => el.hidden)).toBe(true);
+});
