@@ -121,3 +121,27 @@ share the GitLab API rate limit; refreshes take longer when more people are onli
   `GitLabClientInterface`.
 - Commit style: `feat(refresh): …`, `feat(docker): …` etc., matching history; one
   commit per feature point, baseline-first.
+
+## Follow-ups (queued after initial implementation)
+
+One commit each, same constraints as above.
+
+### F1. Broadcast queue membership so queued rows show their border
+
+On `cycle_started` (or immediately after queue build), publish the ordered list of
+queued MR ids on the `refresh` topic. Frontend: set `.refresh-queued` on those rows
+(the CSS already exists) and clear it when the row moves to fetching/done or the
+cycle ends.
+
+### F2. Splice brand-new MR rows into the list live
+
+When a `data` "changed" event refers to an MR with no DOM row, build the row and
+insert it at the correct sorted position (respecting the current view: stale
+grouping, or the two "My view" sections), instead of waiting for the next full
+reload. Keep the no-full-rebuild constraint.
+
+### F3. Drop the unused next-sync fields from the API contract
+
+Remove `meta.next_sync_at` and `AppConfig::SYNC_INTERVAL_SECONDS` (nothing displays
+them since the countdown replaced the sync ETA). Update `ApiBuilder`, tests, and
+SPEC.md accordingly.
