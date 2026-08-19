@@ -3,12 +3,17 @@
 # files from disk on every request. The image only needs a rebuild when
 # dependencies (composer.json/lock) or the Dockerfile itself change.
 #
+# Designed to run on the same host as the production container and SHARE the
+# production database, so the preview shows the real data:
+#
 #   docker compose -f docker-compose.dev.yml up -d --build
-#   docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync --full
+#   docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync --full   # first run / fresh volume
 #
 # Standalone on purpose: plain `docker compose up` would also auto-load
-# docker-compose.override.yml (the Traefik production routing), which does not
-# apply on a dev machine.
+# docker-compose.override.yml (Traefik routing + fixed container_name
+# company-cr-dashboard), which does not apply to a dev container and would
+# collide with the running production one. This file is loaded only when named
+# explicitly with -f.
 services:
   cr-dashboard:
     image: cr-dashboard:dev
@@ -28,11 +33,17 @@ services:
       - ./src:/app/src         # backend
       - ./config:/app/config
       - ./bin:/app/bin
-      # Dev SQLite lives in its own volume, separate from production data.
-      # var/ is intentionally NOT mounted: the entrypoint chowns /app/var to
-      # www-data, which would take over the host checkout.
-      - cr-dashboard-dev-data:/var/lib/cr-dashboard
+      # The SAME database as production: cr-dashboard-data is the volume the
+      # production compose mounts, so the dev preview sees the real data.
+      # (Both compose files live in the same checkout, so the volume key
+      # resolves to the same <project>_cr-dashboard-data volume on the host.)
+      - cr-dashboard-data:/var/lib/cr-dashboard
+      # No scheduled jobs in dev: the production cron keeps the shared database
+      # fresh, and the dev container only writes to it when sync is run
+      # explicitly (see the header). The sync lock in the DB makes even that
+      # safe to run while the production sync is mid-flight.
+      - ./docker/crontab.dev:/etc/crontab:ro
     restart: unless-stopped
 
 volumes:
-  cr-dashboard-dev-data:
+  cr-dashboard-data:

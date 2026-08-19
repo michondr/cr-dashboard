@@ -1,0 +1,6 @@
+# Dev override of /etc/crontab: no scheduled jobs.
+#
+# The dev container shares the production data volume (cr-dashboard-data), and
+# the production container's cron keeps that database fresh. The dev container
+# therefore never syncs on a schedule; run syncs explicitly when wanted:
+#   docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync
