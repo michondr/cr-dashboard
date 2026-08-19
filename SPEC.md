@@ -57,7 +57,7 @@ The MR list, top to bottom: the last 5 merged MRs grayed out (pinned to the top)
 
 ### 2.2 MR row
 
-The row is a single horizontal strip that fills the widescreen width. Each field is its own column. Columns do not wrap; the row grows wider on larger screens and the description column absorbs the spare width. A row is one line tall for open MRs and two lines tall once the description expands.
+The row is a single horizontal strip that fills the widescreen width. Each field is its own column. Columns do not wrap; the row grows wider on larger screens and the title column absorbs the spare width (the description column is narrow and stays capped). A row is always one line tall.
 
 Columns, left to right:
 
@@ -65,8 +65,8 @@ Columns, left to right:
 |---|--------|---------|----------|
 | 1 | Project | avatar | The MR's project avatar. Hovering shows the project name (falls back to the path when the cache has no display name yet). Falls back to the project name's initial when the project has no avatar. |
 | 2 | Jira | `REC-1234` | Link to `{JIRA_URL}{ticket}`. Empty if no ticket in title. |
-| 3 | Title | `Add feature X` | Link to the MR in a new tab, with the Jira ticket prefix stripped. Truncates with ellipsis when long. |
-| 4 | Description | `Lorem ipsum dolor…` | One line with an ellipsis when long. Click expands in place to the full text. Absorbs spare width on widescreen. |
+| 3 | Title | `Add feature X` | Link to the MR in a new tab, with the Jira ticket prefix stripped. Larger type (15px, semibold). Absorbs the spare width and truncates with ellipsis when long. |
+| 4 | Description | `Lorem ipsum dolor…` | Narrow capped column, one line with an ellipsis when long. Hovering a truncated description shows the full text in a tooltip rendered as Markdown (headings, lists, code, links, emphasis; never raw HTML — see §4.11). |
 | 5 | Author | avatar + `J. Doe` | Avatar then name. |
 | 6 | Status | `draft` / `needs rebase` / `stale 💩` / `unresolved discussion 📝` / `approved` / `ready ✅` | One badge per status transition that applies (all of them, not a single winner): `draft` when the MR is a draft; `needs rebase` when GitLab reports `has_conflicts` or `merge_status` is `cannot_be_merged`; `stale 💩` when open older than `STALE_DAYS`; `unresolved discussion 📝` when at least one resolvable discussion thread is unresolved; `approved` when approvals ≥ `REQUIRED_APPROVALS` (hidden when `ready` also applies); `ready ✅` when the MR is approved, its latest pipeline is green (`indicator: check`) and there are no unresolved discussions. Empty when none apply. Badges wrap onto a second row when several apply (at most two rows per cell), so the row never grows taller. The list shows open MRs only — merged/closed MRs are kept in the cache for the metrics but hidden from the list. |
 | 7 | Age | `3d 04:12:33` | `now - created_at` for open, `merged_at - created_at` for merged, `closed_at - created_at` for closed. |
@@ -79,7 +79,7 @@ Widescreen layout (top header row, then sample open MRs):
 
 ```
 +---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
-| Project | Jira   | Title              | Description (coll. 50px)    | Author  | Status    | Age     | 1st App | Approvers | Pipe   | Commits|
+| Project | Jira   | Title              | Description (coll. ~140px)  | Author  | Status    | Age     | 1st App | Approvers | Pipe   | Commits|
 +---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
 | (av)    | REC-…  | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | ready     | 3d04:12 | (av)1d  | (av)(av)  | [sp]   | [2comm]|
 | (av)    |        | Fix bug Y          | Consectetur adipiscing…     | (av) JR | stale 💩 | 5d02:00 | (av)0d  | (av)      | [ok]   | [1comm]|
@@ -88,7 +88,7 @@ Widescreen layout (top header row, then sample open MRs):
 ```
 ```
 
-The Jira ticket links to the Jira issue. The title links to the MR in a new tab with the Jira ticket prefix stripped. The description shows one line with an ellipsis when long and expands to the full text on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; status badges show per column 5. The row never scrolls horizontally; on narrower screens the description column shrinks first.
+The Jira ticket links to the Jira issue. The title links to the MR in a new tab with the Jira ticket prefix stripped. The description shows one narrow ellipsized line; hovering a truncated description shows the full text rendered as Markdown in a tooltip. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; status badges show per column 5. The row never scrolls horizontally; on narrower screens the title shrinks first, then the description down to its minimum.
 
 ### 2.3 My view filter
 
@@ -126,7 +126,7 @@ Each cell header shows a `(?)` tooltip icon. Duration/size cells also show a `�
 4. As a team member, I want merged and closed MRs grayed out, so that I can tell them from open MRs.
 5. As a team member, I want the MR title to open the MR in a new tab, so that I can review it.
 6. As a team member, I want the Jira ticket extracted from the title, so that I can open the Jira issue.
-7. As a team member, I want the MR description collapsed after 50 pixels, so that the list stays dense.
+7. As a team member, I want the MR description collapsed to a narrow ellipsized line with the full text on hover, so that the list stays dense.
 8. As a team member, I want a link to open all commit diffs, so that I can review each commit.
 9. As a team member, I want the pipeline status on each MR, so that I know if the build passes.
 10. As a team member, I want a spinner while the pipeline runs, so that I know it is in progress.
@@ -506,7 +506,7 @@ The header shows the sync status from `meta`: `last_sync_at` and `next_sync_at`,
 
 The backend computes all thresholds and day boundaries in UTC; the frontend renders timestamps in the browser's local time.
 
-All content that originates from GitLab (MR titles, descriptions, commit messages, author names) is rendered as text via `textContent`, never `innerHTML`, to avoid stored XSS from MR content.
+All content that originates from GitLab (MR titles, commit messages, author names) is rendered as text via `textContent`, never `innerHTML`. The one exception is the description hover tooltip: its Markdown is rendered by a small self-contained renderer (`public/markdown.js`) that HTML-escapes the source before applying any Markdown transform and only generates tags of its own (links additionally filtered to `http(s)`/`mailto`/relative), so assigning its output via `innerHTML` cannot inject stored XSS from MR content.
 
 ### 4.12 Docker
 

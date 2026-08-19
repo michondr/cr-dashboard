@@ -1,4 +1,5 @@
 import { getMode, toggleMode } from './toggle.js';
+import { renderMarkdown } from './markdown.js';
 
 const REFRESH_MS = 60_000;
 
@@ -300,6 +301,49 @@ function formatBucketLabel(key) {
     return key.replace(' ', ' · ');
 }
 
+// A single shared tooltip for the description column. It lives on the body and
+// is positioned fixed (clamped to the viewport) so it escapes the list's
+// overflow-hidden cells and clipped scroll area. Content is the MR description
+// rendered as markdown; the renderer HTML-escapes everything, so innerHTML is
+// safe here.
+let descTip = null;
+
+function getDescTip() {
+    if (!descTip) {
+        descTip = el('div', 'desc-tip');
+        descTip.hidden = true;
+        document.body.appendChild(descTip);
+    }
+
+    return descTip;
+}
+
+function showDescTip(anchor, description) {
+    const tip = getDescTip();
+    tip.textContent = '';
+    tip.innerHTML = renderMarkdown(description);
+    tip.hidden = false;
+
+    const rect = anchor.getBoundingClientRect();
+    const pad = 8;
+    let left = rect.left;
+    if (left + tip.offsetWidth > window.innerWidth - pad) {
+        left = Math.max(pad, window.innerWidth - tip.offsetWidth - pad);
+    }
+    let top = rect.bottom + 6;
+    if (top + tip.offsetHeight > window.innerHeight - pad) {
+        top = Math.max(pad, rect.top - tip.offsetHeight - 6);
+    }
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+}
+
+function hideDescTip() {
+    if (descTip) {
+        descTip.hidden = true;
+    }
+}
+
 function renderPipeline(p) {
     const cell = el('span', 'pipe-cell');
     if (!p || p.indicator === 'none') {
@@ -376,8 +420,14 @@ function renderMrRow(mr, dimmed) {
 
     const desc = el('div', 'col-desc desc');
     desc.textContent = mr.description || '';
-    desc.title = 'Click to expand or collapse';
-    desc.addEventListener('click', () => desc.classList.toggle('expanded'));
+    // The description collapses to one ellipsized line; hovering a truncated
+    // description shows the full text as markdown in the shared tooltip.
+    desc.addEventListener('mouseenter', () => {
+        if (desc.scrollWidth > desc.clientWidth + 1) {
+            showDescTip(desc, mr.description);
+        }
+    });
+    desc.addEventListener('mouseleave', hideDescTip);
     row.appendChild(desc);
 
     const author = el('span', 'col-author');

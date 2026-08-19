@@ -112,6 +112,48 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     expect(errors).toEqual([]);
 });
 
+test('description stays collapsed and hovers to a markdown-rendered tooltip', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    // Descriptions are one ellipsized line, never click-expanded.
+    expect(await page.locator('.desc.expanded').count()).toBe(0);
+    const cellStyle = await page.locator('.mr-row .desc:visible').first().evaluate((el) => {
+        const style = getComputedStyle(el);
+        return {
+            whiteSpace: style.whiteSpace,
+            overflow: style.overflow,
+            textOverflow: style.textOverflow,
+            truncated: el.scrollWidth > el.clientWidth + 1,
+        };
+    });
+    expect(cellStyle.whiteSpace).toBe('nowrap');
+    expect(cellStyle.overflow).toBe('hidden');
+    expect(cellStyle.textOverflow).toBe('ellipsis');
+    expect(cellStyle.truncated).toBe(true);
+
+    // MR 204 has a markdown description; the cell still shows raw text.
+    const row = page.locator('.mr-row', { hasText: 'Fix login redirect' }).first();
+    const cell = row.locator('.desc');
+    expect(await cell.textContent()).toContain('**the redirect loop**');
+
+    // Hovering the truncated description opens the shared tooltip with the
+    // description rendered as markdown.
+    await cell.hover();
+    const tip = page.locator('.desc-tip');
+    await expect(tip).toBeVisible();
+    await expect(tip.locator('h2')).toHaveText('Summary');
+    expect(await tip.locator('strong').count()).toBeGreaterThanOrEqual(1);
+    expect(await tip.locator('code').count()).toBeGreaterThanOrEqual(1);
+    expect(await tip.locator('pre code').count()).toBe(1);
+    expect(await tip.locator('blockquote').count()).toBe(1);
+    expect(await tip.textContent()).toContain('$client->getRedirect($request);');
+
+    // Leaving the cell hides the tooltip again.
+    await page.mouse.move(10, 10);
+    await expect(tip).toBeHidden();
+});
+
 test('my view filter splits the list into authored and awaiting review', async ({ page }) => {
     await page.goto('/?user=1');
     await page.waitForSelector('.mr-section');

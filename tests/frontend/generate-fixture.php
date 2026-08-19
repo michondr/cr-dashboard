@@ -74,13 +74,33 @@ $blockedMr['has_conflicts'] = true;
 $draftMr = $mr(209, 'opened', $now - DAY, null, 1, 'REC-205 - Draft the docs');
 $draftMr['draft'] = true;
 
+// MR 204 carries a markdown description so the frontend smoke test can assert
+// the hover tooltip renders markdown (heading, strong, inline code, list,
+// blockquote, fenced code block) instead of raw text.
+$markdownMr = $mr(204, 'opened', $now - DAY, null, 3, 'REC-310 - Fix login redirect');
+$markdownMr['description'] = implode("\n", [
+    '## Summary',
+    '',
+    'Fixes **the redirect loop** when `oauth2` returns an expired `state`.',
+    '',
+    '- Validates the `state` parameter',
+    '- **Bails out** with a clear error',
+    '- Keeps the *return_to* query intact',
+    '',
+    '> The `redirect_uri` must stay whitelisted.',
+    '',
+    '```php',
+    '$client->getRedirect($request);',
+    '```',
+]);
+
 $client->mergeRequests['all'] = [
     $mr(301, 'merged', $now - (6 * DAY), $now - (2 * DAY), 1, 'REC-101 - Ship the parser'),
     $mr(302, 'merged', $now - (20 * DAY), $now - (12 * DAY), 2, 'REC-102 - Refactor the cache'),
     $mr(201, 'opened', $now - (2 * DAY), null, 1, 'REC-200 - Add an export button'),
     $mr(202, 'opened', $now - (75 * DAY), null, 2, 'REC-150 - Migrate the legacy API'),
     $mr(203, 'closed', $now - (30 * DAY), null, 3, 'REC-300 - Try websockets'),
-    $mr(204, 'opened', $now - DAY, null, 3, 'REC-310 - Fix login redirect'),
+    $markdownMr,
     $mr(205, 'opened', $now - (3 * DAY), null, 1, 'REC-201 - Polish the onboarding'),
     $mr(206, 'opened', $now - (5 * DAY), null, 2, 'REC-202 - Cache invalidation fix'),
     $mr(207, 'opened', $now - (8 * DAY), null, 3, 'REC-203 - Add an audit log'),

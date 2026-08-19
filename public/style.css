@@ -149,15 +149,109 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    cursor: pointer;
     font-size: 13px;
     color: var(--text-dim);
 }
 
-.desc.expanded {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: clip;
+/* Hover tooltip for the description column: the full MR description rendered
+   as markdown. Fixed-positioned by JS (see showDescTip) and clamped to the
+   viewport, so it escapes the list's overflow-hidden cells and scroll area. */
+.desc-tip {
+    position: fixed;
+    z-index: 40;
+    max-width: 440px;
+    max-height: 60vh;
+    overflow: auto;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.45;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.desc-tip[hidden] {
+    display: none;
+}
+
+.desc-tip p {
+    margin: 0 0 6px;
+}
+
+.desc-tip p:last-child {
+    margin-bottom: 0;
+}
+
+.desc-tip h1,
+.desc-tip h2,
+.desc-tip h3 {
+    font-size: 14px;
+    margin: 8px 0 4px;
+}
+
+.desc-tip h4,
+.desc-tip h5,
+.desc-tip h6 {
+    font-size: 13px;
+    margin: 6px 0 2px;
+}
+
+.desc-tip ul,
+.desc-tip ol {
+    margin: 4px 0;
+    padding-left: 18px;
+}
+
+.desc-tip li {
+    margin: 1px 0;
+}
+
+.desc-tip code {
+    background: var(--bg);
+    border-radius: 3px;
+    padding: 1px 3px;
+    font-size: 12px;
+}
+
+.desc-tip pre {
+    background: var(--bg);
+    border-radius: 4px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    font-size: 12px;
+}
+
+.desc-tip pre code {
+    background: none;
+    padding: 0;
+}
+
+.desc-tip blockquote {
+    margin: 4px 0;
+    padding-left: 10px;
+    border-left: 3px solid var(--border);
+    color: var(--text-dim);
+}
+
+.desc-tip a {
+    color: var(--accent);
+}
+
+.desc-tip hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 6px 0;
+}
+
+.desc-tip del {
+    color: var(--text-dim);
+}
+
+.desc-tip input[type="checkbox"] {
+    margin: 0 4px 0 0;
+    vertical-align: -1px;
 }
 
 .col-author {
