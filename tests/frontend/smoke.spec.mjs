@@ -141,6 +141,11 @@ test('hovering a chart shows a toolbar with each avatar and its value at that ti
         expect(await row.locator('.tip-val').textContent()).toBeTruthy();
     }
 
+    // Rows are ordered by all-time MR count (descending), matching the user
+    // dropdown: John Roe (7), Jane Doe (4), Ann Lee (2).
+    const names = await rows.locator('.tip-name').allTextContents();
+    expect(names).toEqual(['John Roe', 'Jane Doe', 'Ann Lee']);
+
     // Leaving the chart hides the toolbar again.
     await page.mouse.move(10, 10);
     await page.waitForTimeout(200);

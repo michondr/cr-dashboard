@@ -607,12 +607,25 @@ function updateChartTooltip(u, wrap, tip, persons, unit) {
     header.textContent = formatBucketLabel(persons[0][1].buckets[idx]);
     tip.appendChild(header);
 
-    persons.forEach(([id, series], index) => {
+    // Order rows by all-time MR count (matching the user dropdown: mr_count DESC,
+    // then name ASC), while keeping each row's border colour tied to its line via
+    // the original series index.
+    const ordered = persons
+        .map(([id, series], lineIndex) => {
+            const user = usersById.get(id) || { name: id, mr_count: 0 };
+            return { id, series, lineIndex, user };
+        })
+        .sort(
+            (a, b) =>
+                (b.user.mr_count ?? 0) - (a.user.mr_count ?? 0) ||
+                String(a.user.name).localeCompare(String(b.user.name)),
+        );
+
+    ordered.forEach(({ id, series, lineIndex, user }) => {
         const values = pickSeries(series, getMode());
-        const user = usersById.get(id) || { name: id };
 
         const row = el('div', 'tip-row');
-        row.style.borderLeftColor = COLORS[index % COLORS.length];
+        row.style.borderLeftColor = COLORS[lineIndex % COLORS.length];
         row.appendChild(avatarImage(user, 'tip-avatar'));
         const name = el('span', 'tip-name');
         name.textContent = user.name || id;
