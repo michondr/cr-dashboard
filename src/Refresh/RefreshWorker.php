@@ -11,6 +11,7 @@ use App\Sync\SlackNotifier;
 use App\Sync\Synchronizer;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
+use Throwable;
 
 use function array_key_exists;
 use function gmdate;
@@ -154,7 +155,13 @@ final class RefreshWorker
      */
     private function publish(string $topic, array $payload): void
     {
-        $this->hub->publish(new Update($topic, (string) json_encode($payload)));
+        // Progress events are best-effort: a hub that is briefly down (e.g.
+        // still booting under supervisord) or rejecting the JWT must not kill
+        // the refresh itself — clients just miss the live update.
+        try {
+            $this->hub->publish(new Update($topic, (string) json_encode($payload)));
+        } catch (Throwable) {
+        }
     }
 
     /**

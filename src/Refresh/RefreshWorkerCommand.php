@@ -8,6 +8,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Throwable;
 
 use function time;
 use function usleep;
@@ -38,7 +39,16 @@ final class RefreshWorkerCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         while ($this->running) {
-            $didWork = $this->worker->tick(time());
+            // The worker must survive anything a tick throws (transient DB
+            // lock, unreachable hub, unexpected GitLab payload): log and keep
+            // polling instead of dying and leaving supervisord to give up
+            // after a few fast crashes (FATAL = no more refreshes at all).
+            try {
+                $didWork = $this->worker->tick(time());
+            } catch (Throwable $e) {
+                $output->writeln('tick failed: ' . $e->getMessage());
+                $didWork = false;
+            }
             if (!$didWork) {
                 usleep(self::IDLE_SLEEP_MICROSECONDS);
             }
