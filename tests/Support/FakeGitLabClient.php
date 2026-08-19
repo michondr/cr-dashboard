@@ -131,4 +131,14 @@ final class FakeGitLabClient implements GitLabClientInterface
 
         return $this->commitStatsBySha[$sha] ?? ['stats' => ['additions' => 0, 'deletions' => 0]];
     }
+
+    /**
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, seconds: float}
+     */
+    public function rawGet(string $path, array $query = []): array
+    {
+        return ['status' => 200, 'body' => '', 'seconds' => 0.0];
+    }
 }

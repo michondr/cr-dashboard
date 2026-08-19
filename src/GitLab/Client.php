@@ -22,6 +22,8 @@ use function rawurlencode;
 use function rtrim;
 use function sprintf;
 use function strlen;
+use function substr;
+use function trim;
 use function usleep;
 
 /**
@@ -31,6 +33,12 @@ use function usleep;
  */
 final class Client implements GitLabClientInterface
 {
+    /**
+     * Seconds to wait for any single API request (connection + transfer).
+     * A stalled or unreachable host fails with a curl error instead of hanging.
+     */
+    private const TIMEOUT_SECONDS = 20;
+
     private float $lastRequestAt = 0.0;
 
     public function __construct(private readonly AppConfig $config)
@@ -113,6 +121,34 @@ final class Client implements GitLabClientInterface
     }
 
     /**
+     * Performs a GET without throwing on a non-2xx response, returning the raw
+     * status, body and elapsed time. A transport failure (timeout, DNS, refused)
+     * yields status 0 with the curl error in `body`. Used for connectivity probes.
+     *
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, seconds: float}
+     */
+    public function rawGet(string $path, array $query = []): array
+    {
+        $this->throttle();
+        $url = $this->buildUrl($path, $query);
+        $start = microtime(true);
+
+        try {
+            $response = $this->execute($url);
+        } catch (RuntimeException $e) {
+            return ['status' => 0, 'body' => $e->getMessage(), 'seconds' => microtime(true) - $start];
+        }
+
+        return [
+            'status' => $response['status'],
+            'body' => $response['body'],
+            'seconds' => microtime(true) - $start,
+        ];
+    }
+
+    /**
      * @param array<string, int|string> $query
      *
      * @return list<array<string, mixed>>
@@ -176,7 +212,30 @@ final class Client implements GitLabClientInterface
     private function requestUrl(string $url): array
     {
         $this->throttle();
+        $response = $this->execute($url);
 
+        $status = $response['status'];
+        if ($status < 200 || $status >= 300) {
+            throw new GitLabException(sprintf(
+                'GitLab API error %d for %s: %s',
+                $status,
+                $url,
+                $this->clipBody($response['body']),
+            ));
+        }
+
+        return $response;
+    }
+
+    /**
+     * Runs a single curl request with the global timeout. Returns the status,
+     * body and headers even for non-2xx responses; only transport-level failures
+     * (timeout, DNS, connection refused) throw.
+     *
+     * @return array{status: int, body: string, headers: list<string>}
+     */
+    private function execute(string $url): array
+    {
         $handle = curl_init($url);
         if ($handle === false) {
             throw new RuntimeException('Unable to initialize curl for GitLab request.');
@@ -184,6 +243,8 @@ final class Client implements GitLabClientInterface
 
         $headers = [];
         curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($handle, CURLOPT_CONNECTTIMEOUT, self::TIMEOUT_SECONDS);
+        curl_setopt($handle, CURLOPT_TIMEOUT, self::TIMEOUT_SECONDS);
         curl_setopt($handle, CURLOPT_HTTPHEADER, [
             'PRIVATE-TOKEN: ' . $this->config->gitlabToken,
             'Accept: application/json',
@@ -202,11 +263,20 @@ final class Client implements GitLabClientInterface
 
         $this->lastRequestAt = microtime(true);
 
-        if ($status < 200 || $status >= 300) {
-            throw new GitLabException(sprintf('GitLab API error %d for %s', $status, $url));
+        return ['status' => $status, 'body' => $body, 'headers' => $headers];
+    }
+
+    /**
+     * Trims an error response body to a log-friendly length for diagnostics.
+     */
+    private function clipBody(string $body): string
+    {
+        $trimmed = trim($body);
+        if (strlen($trimmed) <= 200) {
+            return $trimmed;
         }
 
-        return ['status' => $status, 'body' => $body, 'headers' => $headers];
+        return substr($trimmed, 0, 200) . '...';
     }
 
     private function throttle(): void

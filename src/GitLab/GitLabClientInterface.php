@@ -47,4 +47,14 @@ interface GitLabClientInterface
      * @return array<string, mixed>
      */
     public function commitStats(int $projectId, string $sha): array;
+
+    /**
+     * Performs a GET without throwing on a non-2xx response, returning the raw
+     * status, body and elapsed seconds. A transport failure yields status 0.
+     *
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, seconds: float}
+     */
+    public function rawGet(string $path, array $query = []): array;
 }
