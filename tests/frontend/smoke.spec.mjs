@@ -486,3 +486,76 @@ test('on a phone the metrics stack one per row and scroll vertically', async ({ 
     // The charts still render.
     expect(await panel.locator('canvas').count()).toBeGreaterThanOrEqual(1);
 });
+
+test('tap support on touch: chart tooltip, tip-icon, and description toggles show and dismiss on tap-outside', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+    await page.waitForTimeout(500);
+
+    // Simulate a touch tap by dispatching a synthetic TouchEvent (works
+    // headless without a real touchscreen).
+    async function tap(locator, offset) {
+        const box = await locator.boundingBox();
+        const x = box.x + (offset ? offset.x : box.width / 2);
+        const y = box.y + (offset ? offset.y : box.height / 2);
+        await page.evaluate(({ x, y }) => {
+            const target = document.elementFromPoint(x, y);
+            const touch = new Touch({ identifier: 1, target, clientX: x, clientY: y });
+            target.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true, cancelable: true }));
+            // Real touch devices synthesize a click after touchstart/touchend;
+            // reproduce that so click-driven toggle handlers (tip-icon, desc) fire.
+            target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }, { x, y });
+        return { x, y };
+    }
+
+    // Tap on a chart shows the chart tooltip.
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    await tap(coverage.locator('.chart-wrap'));
+    await page.waitForTimeout(150);
+    await expect(coverage.locator('.chart-tip')).toBeVisible();
+
+    // Tapping outside the chart hides it.
+    await page.evaluate(() => {
+        const touch = new Touch({ identifier: 2, target: document.body, clientX: 2, clientY: 2 });
+        document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true, cancelable: true }));
+    });
+    await page.waitForTimeout(150);
+    await expect(coverage.locator('.chart-tip')).toBeHidden();
+
+    // Tap on the (?) tip icon toggles its tooltip open.
+    const tipIcon = coverage.locator('.tip-icon');
+    await tap(tipIcon);
+    await expect(tipIcon).toHaveClass(/open/);
+
+    // Tapping outside closes it.
+    await page.evaluate(() => {
+        const touch = new Touch({ identifier: 3, target: document.body, clientX: 2, clientY: 2 });
+        document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true, cancelable: true }));
+    });
+    await expect(tipIcon).not.toHaveClass(/open/);
+
+    // Tap on a truncated description toggles its tooltip.
+    await page.waitForSelector('#mr-list > .mr-row');
+    const descs = page.locator('.col-desc');
+    const count = await descs.count();
+    let truncated = null;
+    for (let i = 0; i < count; i++) {
+        const d = descs.nth(i);
+        const isTruncated = await d.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+        if (isTruncated) {
+            truncated = d;
+            break;
+        }
+    }
+    test.skip(!truncated, 'no truncated description in fixture data');
+    if (truncated) {
+        await tap(truncated);
+        await expect(page.locator('.desc-tip')).toBeVisible();
+        await page.evaluate(() => {
+            const touch = new Touch({ identifier: 4, target: document.body, clientX: 2, clientY: 2 });
+            document.body.dispatchEvent(new TouchEvent('touchstart', { touches: [touch], bubbles: true, cancelable: true }));
+        });
+        await expect(page.locator('.desc-tip')).toBeHidden();
+    }
+});

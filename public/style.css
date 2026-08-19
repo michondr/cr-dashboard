@@ -533,7 +533,8 @@ body {
     flex: 0 0 auto;
 }
 
-.tip-icon:hover::after {
+.tip-icon:hover::after,
+.tip-icon.open::after {
     content: attr(data-tip);
     position: absolute;
     left: 0;

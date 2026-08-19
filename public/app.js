@@ -446,6 +446,21 @@ function renderMrRow(mr, dimmed) {
         }
     });
     desc.addEventListener('mouseleave', hideDescTip);
+    // Touch devices have no hover; a tap toggles the same tooltip, and a tap
+    // outside (wired globally below) dismisses it.
+    desc.addEventListener('click', (e) => {
+        if (desc.scrollWidth <= desc.clientWidth + 1) {
+            return;
+        }
+        e.stopPropagation();
+        const isOpen = descTip && !descTip.hidden && descTip.ownerDesc === desc;
+        if (isOpen) {
+            hideDescTip();
+        } else {
+            showDescTip(desc, mr.description);
+            getDescTip().ownerDesc = desc;
+        }
+    });
     row.appendChild(desc);
 
     const author = el('span', 'col-author');
@@ -663,6 +678,14 @@ function buildCellHeader(meta, metric) {
     const tip = el('span', 'tip-icon');
     tip.textContent = '(?)';
     tip.dataset.tip = meta.tooltip.join('\n');
+    // Desktop shows the tooltip on hover (CSS only); touch devices have no
+    // hover, so a tap toggles an .open class that CSS renders the same way.
+    tip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = tip.classList.contains('open');
+        document.querySelectorAll('.tip-icon.open').forEach((t) => t.classList.remove('open'));
+        tip.classList.toggle('open', !wasOpen);
+    });
     header.appendChild(tip);
 
     if (meta.kind === 'meanmedian') {
@@ -876,6 +899,19 @@ function createChart(wrap, key, meta, data) {
         resetZoom();
     });
 
+    // uPlot only tracks the mouse; bridge touch tap/drag into the same
+    // cursor so updateChartTooltip shows the toolbar on touch devices too.
+    const moveTouchCursor = (e) => {
+        const touch = e.touches && e.touches[0];
+        if (!touch) {
+            return;
+        }
+        const rect = wrap.getBoundingClientRect();
+        u.setCursor({ left: touch.clientX - rect.left, top: touch.clientY - rect.top });
+    };
+    wrap.addEventListener('touchstart', moveTouchCursor, { passive: true });
+    wrap.addEventListener('touchmove', moveTouchCursor, { passive: true });
+
     return u;
 }
 
@@ -1049,6 +1085,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadData('day');
     setInterval(() => loadData(state.bucket), REFRESH_MS);
+
+    // Tapping outside an open touch-driven tooltip (chart cursor, tip-icon,
+    // or description) dismisses it.
+    document.addEventListener(
+        'touchstart',
+        (e) => {
+            if (!e.target.closest('.chart-wrap')) {
+                for (const chart of charts) {
+                    if (chart) {
+                        chart.setCursor({ left: -10, top: -10 });
+                    }
+                }
+            }
+            if (!e.target.closest('.tip-icon')) {
+                document.querySelectorAll('.tip-icon.open').forEach((t) => t.classList.remove('open'));
+            }
+            if (!e.target.closest('.desc')) {
+                hideDescTip();
+            }
+        },
+        { passive: true },
+    );
 
     // Exposed for the Playwright test that verifies unchanged polls skip the
     // rebuild; not used by any runtime code path.
