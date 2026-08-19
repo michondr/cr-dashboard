@@ -6,7 +6,12 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
 COPY . .
-RUN composer dump-autoload --no-dev --classmap-authoritative
+# Production bakes a classmap-authoritative autoloader so a missing class fails
+# fast at build time. Local dev (docker-compose.dev.yml) overrides this ARG to
+# an empty value, keeping the PSR-4 fallback so classes added to the bind-mounted
+# source resolve without rebuilding the image.
+ARG CLASSMAP_AUTHORITATIVE=--classmap-authoritative
+RUN composer dump-autoload --no-dev $CLASSMAP_AUTHORITATIVE
 
 # Stage 2 — runtime: nginx + php-fpm + cron under supervisor.
 FROM php:8.5-fpm-alpine

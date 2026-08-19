@@ -1,0 +1,38 @@
+# Local development compose file — run the app straight from the source checkout
+# so code edits are visible without rebuilding the image: nginx and php-fpm read
+# files from disk on every request. The image only needs a rebuild when
+# dependencies (composer.json/lock) or the Dockerfile itself change.
+#
+#   docker compose -f docker-compose.dev.yml up -d --build
+#   docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync --full
+#
+# Standalone on purpose: plain `docker compose up` would also auto-load
+# docker-compose.override.yml (the Traefik production routing), which does not
+# apply on a dev machine.
+services:
+  cr-dashboard:
+    image: cr-dashboard:dev
+    build:
+      context: .
+      args:
+        # Don't bake the classmap-authoritative autoloader: with the source
+        # bind-mounted below, classes added to src/ must resolve via PSR-4.
+        CLASSMAP_AUTHORITATIVE: ""
+    ports:
+      - "8080:80"
+    env_file:
+      - .env.local
+    volumes:
+      # Live source — served fresh on every request, no restart needed either.
+      - ./public:/app/public   # frontend SPA
+      - ./src:/app/src         # backend
+      - ./config:/app/config
+      - ./bin:/app/bin
+      # Dev SQLite lives in its own volume, separate from production data.
+      # var/ is intentionally NOT mounted: the entrypoint chowns /app/var to
+      # www-data, which would take over the host checkout.
+      - cr-dashboard-dev-data:/var/lib/cr-dashboard
+    restart: unless-stopped
+
+volumes:
+  cr-dashboard-dev-data:
