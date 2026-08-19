@@ -242,6 +242,23 @@ function renderAvatar(node, name, avatarUrl) {
     }
 }
 
+// An avatar element that can live anywhere (on a line point, in a tooltip row).
+// Falls back to an initial when the user has no avatar_url, so an avatarless
+// person still gets a visible marker instead of a broken <img src="">.
+function avatarImage(user, className) {
+    if (user && user.avatar_url) {
+        const img = el('img', className);
+        img.alt = user.name || '';
+        img.src = user.avatar_url;
+
+        return img;
+    }
+    const fallback = el('span', `${className} ${className}-fallback`);
+    fallback.textContent = ((user && user.name) || '?').charAt(0).toUpperCase();
+
+    return fallback;
+}
+
 function renderPipeline(p) {
     const cell = el('span', 'pipe-cell');
     if (!p || p.indicator === 'none') {
@@ -526,15 +543,16 @@ function updateAvatars(u, wrap, persons, unit) {
             return;
         }
 
-        const user = usersById.get(id) || {};
+        const user = usersById.get(id) || { name: id };
         const x = bucketToEpoch(series.buckets[lastIndex]);
         const y = values[lastIndex];
-        const px = u.valToPos(x, 'x');
-        const py = u.valToPos(y, 'y');
+        // valToPos returns plot-area-relative coords (0 at the grid's left/top
+        // edge, excluding the axes); the overlay spans the whole wrap, so add
+        // the plot area's offset to land on the actual line point.
+        const px = u.bbox.left + u.valToPos(x, 'x');
+        const py = u.bbox.top + u.valToPos(y, 'y');
 
-        const avatar = el('img', 'avatar-point');
-        avatar.alt = user.name || id;
-        avatar.src = user.avatar_url || '';
+        const avatar = avatarImage(user, 'avatar-point');
         avatar.style.left = `${px}px`;
         avatar.style.top = `${py}px`;
         overlay.appendChild(avatar);

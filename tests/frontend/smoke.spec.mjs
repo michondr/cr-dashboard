@@ -65,3 +65,23 @@ test('my view filter splits the list into authored and awaiting review', async (
     expect(await page.locator('#user-filter-select').inputValue()).toBe('1');
     await expect(page.locator('#user-clear')).toBeVisible();
 });
+
+test('chart cells mark each line with an avatar on its last point', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell');
+    await page.waitForTimeout(500);
+
+    // Each metric cell with data shows one avatar marker per person at the last
+    // drawn point of its line. Markers fall back to an initial for avatarless
+    // users instead of a broken <img src="">.
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const markers = coverage.locator('.avatar-point');
+    expect(await markers.count()).toBeGreaterThanOrEqual(1);
+    // Every marker is either an <img> with a src or an initials fallback span.
+    const markerKinds = await markers.evaluateAll((els) =>
+        els.map((el) => ({ tag: el.tagName, hasSrc: Boolean(el.getAttribute('src')) }))
+    );
+    for (const kind of markerKinds) {
+        expect(kind.tag === 'IMG' ? kind.hasSrc : true).toBe(true);
+    }
+});
