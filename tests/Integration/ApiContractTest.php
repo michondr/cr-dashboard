@@ -52,6 +52,10 @@ final class ApiContractTest extends TestCase
             'INSERT INTO users (id, name, username, avatar_url) VALUES (2, ?, ?, ?)',
             ['Bob', 'bob', null],
         );
+        $this->database->execute(
+            "INSERT INTO projects (id, path_with_namespace, name, avatar_url) VALUES (1, ?, ?, NULL)",
+            ['group/proj', 'Proj'],
+        );
 
         $this->insertMr(101, 'opened', $now - (2 * self::DAY), null, null, 1, 'REC-1234 - Add feature');
         $this->database->execute(
@@ -108,6 +112,12 @@ final class ApiContractTest extends TestCase
 
         self::assertSame('REC-1234', $openMr['jira_ticket']);
         self::assertSame('opened', $openMr['state']);
+
+        $project = $openMr['project'];
+        self::assertIsArray($project);
+        self::assertSame('group/proj', $project['path_with_namespace']);
+        self::assertSame('Proj', $project['name']);
+        self::assertNull($project['avatar_url']);
         self::assertFalse($openMr['draft']);
         self::assertFalse($openMr['stale']);
         self::assertSame(2 * self::DAY, $openMr['age_seconds']);

@@ -5,12 +5,12 @@
         "window_days": 60,
         "coverage_window_days": 30,
         "jira_url": "https://jira.example.test/browse/",
-        "generated_at": "2026-08-19T19:08:53+00:00",
+        "generated_at": "2026-08-19T19:41:42+00:00",
         "cache_age_seconds": 0,
-        "last_sync_at": "2026-08-19T19:08:53+00:00",
-        "next_sync_at": "2026-08-19T19:23:53+00:00",
-        "last_rank_at": "2026-08-19T19:08:53+00:00",
-        "next_rank_at": "2026-08-20T19:08:53+00:00"
+        "last_sync_at": "2026-08-19T19:41:42+00:00",
+        "next_sync_at": "2026-08-19T19:56:42+00:00",
+        "last_rank_at": "2026-08-19T19:41:42+00:00",
+        "next_rank_at": "2026-08-20T19:41:42+00:00"
     },
     "users": [
         {
@@ -39,7 +39,12 @@
         {
             "id": 201,
             "iid": 201,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-200 - Add an export button",
             "jira_ticket": "REC-200",
             "description": "This is a description of MR 201 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -52,7 +57,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-17T19:08:53+00:00",
+            "created_at": "2026-08-17T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/201",
@@ -73,14 +78,14 @@
                     "name": "John Roe",
                     "username": "jroe",
                     "avatar_url": null,
-                    "approved_at": "2026-08-18T19:08:53+00:00"
+                    "approved_at": "2026-08-18T19:41:42+00:00"
                 },
                 {
                     "id": 3,
                     "name": "Ann Lee",
                     "username": "alee",
                     "avatar_url": null,
-                    "approved_at": "2026-08-18T20:08:53+00:00"
+                    "approved_at": "2026-08-18T20:41:42+00:00"
                 }
             ],
             "needs_rebase": false,
@@ -91,7 +96,12 @@
         {
             "id": 202,
             "iid": 202,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-150 - Migrate the legacy API",
             "jira_ticket": "REC-150",
             "description": "This is a description of MR 202 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -104,7 +114,7 @@
             "state": "opened",
             "draft": false,
             "stale": true,
-            "created_at": "2026-06-05T19:08:53+00:00",
+            "created_at": "2026-06-05T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/202",
@@ -128,7 +138,12 @@
         {
             "id": 204,
             "iid": 204,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-310 - Fix login redirect",
             "jira_ticket": "REC-310",
             "description": "This is a description of MR 204 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -141,7 +156,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-18T19:08:53+00:00",
+            "created_at": "2026-08-18T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/204",
@@ -162,14 +177,14 @@
                     "name": "Jane Doe",
                     "username": "jdoe",
                     "avatar_url": null,
-                    "approved_at": "2026-08-19T17:08:53+00:00"
+                    "approved_at": "2026-08-19T17:41:42+00:00"
                 },
                 {
                     "id": 2,
                     "name": "John Roe",
                     "username": "jroe",
                     "avatar_url": null,
-                    "approved_at": "2026-08-19T18:08:53+00:00"
+                    "approved_at": "2026-08-19T18:41:42+00:00"
                 }
             ],
             "needs_rebase": false,
@@ -180,7 +195,12 @@
         {
             "id": 205,
             "iid": 205,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-201 - Polish the onboarding",
             "jira_ticket": "REC-201",
             "description": "This is a description of MR 205 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -193,7 +213,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-16T19:08:53+00:00",
+            "created_at": "2026-08-16T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/205",
@@ -215,7 +235,12 @@
         {
             "id": 206,
             "iid": 206,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-202 - Cache invalidation fix",
             "jira_ticket": "REC-202",
             "description": "This is a description of MR 206 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -228,7 +253,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-14T19:08:53+00:00",
+            "created_at": "2026-08-14T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/206",
@@ -247,14 +272,14 @@
                     "name": "Jane Doe",
                     "username": "jdoe",
                     "avatar_url": null,
-                    "approved_at": "2026-08-18T19:08:53+00:00"
+                    "approved_at": "2026-08-18T19:41:42+00:00"
                 },
                 {
                     "id": 3,
                     "name": "Ann Lee",
                     "username": "alee",
                     "avatar_url": null,
-                    "approved_at": "2026-08-19T18:08:53+00:00"
+                    "approved_at": "2026-08-19T18:41:42+00:00"
                 }
             ],
             "needs_rebase": false,
@@ -265,7 +290,12 @@
         {
             "id": 207,
             "iid": 207,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-203 - Add an audit log",
             "jira_ticket": "REC-203",
             "description": "This is a description of MR 207 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -278,7 +308,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-11T19:08:53+00:00",
+            "created_at": "2026-08-11T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/207",
@@ -300,7 +330,12 @@
         {
             "id": 208,
             "iid": 208,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-204 - Export the web",
             "jira_ticket": "REC-204",
             "description": "This is a description of MR 208 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -313,7 +348,7 @@
             "state": "opened",
             "draft": false,
             "stale": false,
-            "created_at": "2026-08-17T19:08:53+00:00",
+            "created_at": "2026-08-17T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/208",
@@ -335,7 +370,12 @@
         {
             "id": 209,
             "iid": 209,
-            "project_path": "group/app",
+            "project": {
+                "id": 1,
+                "path_with_namespace": "group/app",
+                "name": "App",
+                "avatar_url": null
+            },
             "title": "REC-205 - Draft the docs",
             "jira_ticket": "REC-205",
             "description": "This is a description of MR 209 with enough text to overflow the 50px collapsed height and force the expand/collapse behaviour on click.",
@@ -348,7 +388,7 @@
             "state": "opened",
             "draft": true,
             "stale": false,
-            "created_at": "2026-08-18T19:08:53+00:00",
+            "created_at": "2026-08-18T19:41:42+00:00",
             "merged_at": null,
             "closed_at": null,
             "web_url": "https://gitlab.example.test/group/app/-/merge_requests/209",

@@ -63,27 +63,29 @@ Columns, left to right:
 
 | # | Column | Content | Behavior |
 |---|--------|---------|----------|
-| 1 | Jira | `REC-1234` | Link to `{JIRA_URL}{ticket}`. Empty if no ticket in title. |
-| 2 | Title | `Add feature X` | Link to the MR in a new tab, with the Jira ticket prefix stripped. Truncates with ellipsis when long. |
-| 3 | Description | `Lorem ipsum dolor…` | One line with an ellipsis when long. Click expands in place to the full text. Absorbs spare width on widescreen. |
-| 4 | Author | avatar + `J. Doe` | Avatar then name. |
-| 5 | Status | `draft` / `needs rebase` / `stale 💩` / `unresolved discussion 📝` / `approved` / `ready ✅` | One badge per condition that applies (all of them, not a single winner): `draft` when the MR is a draft; `needs rebase` when GitLab reports `has_conflicts` or `merge_status` is `cannot_be_merged`; `stale 💩` when open older than `STALE_DAYS`; `unresolved discussion 📝` when at least one resolvable discussion thread is unresolved; `approved` when approvals ≥ `REQUIRED_APPROVALS` (hidden when `ready` also applies); `ready ✅` when the MR is approved, its latest pipeline is green (`indicator: check`) and there are no unresolved discussions. Empty when none apply. Badges wrap onto a second row when several apply (at most two rows per cell), so the row never grows taller. The list shows open MRs only — merged/closed MRs are kept in the cache for the metrics but hidden from the list. |
-| 6 | Age | `3d 04:12:33` | `now - created_at` for open, `merged_at - created_at` for merged, `closed_at - created_at` for closed. |
-| 7 | First approve | `(av) 1d 02:11` | First approver's avatar then the time to first approval. Empty if none. |
-| 8 | Approvers | `(av)(av)` | Avatars of everyone who approved, earliest first, slightly overlapping. |
-| 9 | Pipeline | `[sp]` / `[ok]` / `[!!]` | Spinner while running (red if a finished job failed, orange if a job warned), green check on success, red on failure, neutral on canceled/skipped/manual. |
-| 10 | Commits | `[3 commits]` | Link opens one new tab per current commit diff. |
+| 1 | Project | avatar | The MR's project avatar. Hovering shows the project name (falls back to the path when the cache has no display name yet). Falls back to the project name's initial when the project has no avatar. |
+| 2 | Jira | `REC-1234` | Link to `{JIRA_URL}{ticket}`. Empty if no ticket in title. |
+| 3 | Title | `Add feature X` | Link to the MR in a new tab, with the Jira ticket prefix stripped. Truncates with ellipsis when long. |
+| 4 | Description | `Lorem ipsum dolor…` | One line with an ellipsis when long. Click expands in place to the full text. Absorbs spare width on widescreen. |
+| 5 | Author | avatar + `J. Doe` | Avatar then name. |
+| 6 | Status | `draft` / `needs rebase` / `stale 💩` / `unresolved discussion 📝` / `approved` / `ready ✅` | One badge per status transition that applies (all of them, not a single winner): `draft` when the MR is a draft; `needs rebase` when GitLab reports `has_conflicts` or `merge_status` is `cannot_be_merged`; `stale 💩` when open older than `STALE_DAYS`; `unresolved discussion 📝` when at least one resolvable discussion thread is unresolved; `approved` when approvals ≥ `REQUIRED_APPROVALS` (hidden when `ready` also applies); `ready ✅` when the MR is approved, its latest pipeline is green (`indicator: check`) and there are no unresolved discussions. Empty when none apply. Badges wrap onto a second row when several apply (at most two rows per cell), so the row never grows taller. The list shows open MRs only — merged/closed MRs are kept in the cache for the metrics but hidden from the list. |
+| 7 | Age | `3d 04:12:33` | `now - created_at` for open, `merged_at - created_at` for merged, `closed_at - created_at` for closed. |
+| 8 | First approve | `(av) 1d 02:11` | First approver's avatar then the time to first approval. Empty if none. |
+| 9 | Approvers | `(av)(av)` | Avatars of everyone who approved, earliest first, slightly overlapping. |
+| 10 | Pipeline | `[sp]` / `[ok]` / `[!!]` | Spinner while running (red if a finished job failed, orange if a job warned), green check on success, red on failure, neutral on canceled/skipped/manual. |
+| 11 | Commits | `[3 commits]` | Link opens one new tab per current commit diff. |
 
 Widescreen layout (top header row, then sample open MRs):
 
 ```
-+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
-| Jira   | Title              | Description (coll. 50px)    | Author  | Status    | Age      | 1st App | Approvers | Pipe   | Commits|
-+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
-| REC-…  | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | ready     | 3d04:12  | (av)1d  | (av)(av)  | [sp]   | [2comm]|
-|        | Fix bug Y          | Consectetur adipiscing…     | (av) JR | stale 💩  | 5d02:00  | (av)0d  | (av)      | [ok]   | [1comm]|
-|        | Refactor Z         | Dolor sit amet consectetur… | (av) AB | approved  | 2d01:00  | (av)1d  | (av)(av)  | [!!]   | [4comm]|
-+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
++---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
+| Project | Jira   | Title              | Description (coll. 50px)    | Author  | Status    | Age     | 1st App | Approvers | Pipe   | Commits|
++---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
+| (av)    | REC-…  | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | ready     | 3d04:12 | (av)1d  | (av)(av)  | [sp]   | [2comm]|
+| (av)    |        | Fix bug Y          | Consectetur adipiscing…     | (av) JR | stale 💩 | 5d02:00 | (av)0d  | (av)      | [ok]   | [1comm]|
+| (av)    |        | Refactor Z         | Dolor sit amet consectetur… | (av) AB | approved | 2d01:00 | (av)1d  | (av)(av)  | [!!]   | [4comm]|
++---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
+```
 ```
 
 The Jira ticket links to the Jira issue. The title links to the MR in a new tab with the Jira ticket prefix stripped. The description shows one line with an ellipsis when long and expands to the full text on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; status badges show per column 5. The row never scrolls horizontally; on narrower screens the description column shrinks first.
@@ -207,7 +209,7 @@ The cache stores current state only. The app computes all history from current s
 Tables:
 
 - `users` — `id`, `name`, `username`, `avatar_url`.
-- `projects` — `id`, `path_with_namespace`.
+- `projects` — `id`, `path_with_namespace`, `name`, `avatar_url`.
 - `merge_requests` — `id`, `iid`, `project_id`, `title`, `description`, `author_id`, `state`, `draft`, `created_at`, `merged_at`, `closed_at`, `updated_at`, `web_url`.
 - `approvals` — `id`, `mr_id`, `user_id`, `created_at`. Wipe-and-reinsert per MR on every re-fetch.
 - `discussions` — `id`, `mr_id`, `user_id`, `created_at`. One row per **discussion thread** (not per note). `user_id` is the author of the first non-system, non-author note; `created_at` is that note's time. Reviewers who only reply to an existing thread are not counted — a known simplification. Wipe-and-reinsert per MR.
@@ -334,7 +336,7 @@ The command uses the Slack Web API `chat.postMessage` with the bot token.
     {
       "id": 1240,
       "iid": 1240,
-      "project_path": "company/app",
+      "project": {"id": 12, "path_with_namespace": "company/app", "name": "App", "avatar_url": "..."},
       "title": "REC-1234 - Add feature X",
       "jira_ticket": "REC-1234",
       "description": "...",

@@ -101,7 +101,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 110px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 288px 110px 100px 120px 44px 90px;
+    grid-template-columns: 60px 110px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 288px 110px 100px 120px 44px 90px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -208,6 +208,53 @@ body {
     justify-content: center;
     font-size: 11px;
     background: var(--panel-2);
+    color: var(--text-dim);
+}
+
+/* Leftmost project column: the project's avatar, hover shows the name. */
+.col-project {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Hover tooltip anchored to the RIGHT of the avatar cell (the cell sits at the
+   left edge, so centering over it would clip off-screen); the bubble grows with
+   the text up to a cap, then wraps. */
+.col-project[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
+    width: max-content;
+    max-width: 300px;
+    padding: 6px 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: normal;
+    line-height: 1.4;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.project-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--panel-2);
+}
+
+.project-avatar-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
     color: var(--text-dim);
 }
 

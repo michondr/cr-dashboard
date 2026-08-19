@@ -112,7 +112,7 @@ final class ApiBuilder
      */
     private function buildMrs(Dataset $dataset, int $now, null|int $user): array
     {
-        $projectPaths = $this->projectPaths();
+        $projects = $this->projectInfos();
         $approvedByUser = $user === null ? [] : $this->approverMrIdsByUser($dataset, $user);
 
         $rows = [];
@@ -130,7 +130,7 @@ final class ApiBuilder
                     continue;
                 }
             }
-            $rows[] = $this->buildMrRow($mr, $projectPaths, $dataset, $now);
+            $rows[] = $this->buildMrRow($mr, $projects, $dataset, $now);
         }
 
         return $rows;
@@ -153,12 +153,12 @@ final class ApiBuilder
 
     /**
      * @param array<string, int|float|string|null> $mr
-     * @param array<int, string> $projectPaths
+     * @param array<int, array{id: int, path_with_namespace: string, name: string, avatar_url: string|null}> $projects
      *
      * @return array{
      *   id: int,
      *   iid: int,
-     *   project_path: string,
+     *   project: array{id: int, path_with_namespace: string, name: string, avatar_url: string|null},
      *   title: string,
      *   jira_ticket: string|null,
      *   description: string,
@@ -184,14 +184,15 @@ final class ApiBuilder
      *   ready: bool
      * }
      */
-    private function buildMrRow(array $mr, array $projectPaths, Dataset $dataset, int $now): array
+    private function buildMrRow(array $mr, array $projects, Dataset $dataset, int $now): array
     {
         $id = (int) $mr['id'];
         $state = (string) $mr['state'];
         $createdAt = (int) $mr['created_at'];
         $mergedAt = $mr['merged_at'] === null ? null : (int) $mr['merged_at'];
         $closedAt = $mr['closed_at'] === null ? null : (int) $mr['closed_at'];
-        $projectPath = $projectPaths[(int) $mr['project_id']] ?? '';
+        $project = $this->projectFor($projects, (int) $mr['project_id']);
+        $projectPath = $project['path_with_namespace'];
         $iid = (int) $mr['iid'];
 
         $ageSeconds = match ($state) {
@@ -225,7 +226,7 @@ final class ApiBuilder
         return [
             'id' => $id,
             'iid' => $iid,
-            'project_path' => $projectPath,
+            'project' => $project,
             'title' => (string) $mr['title'],
             'jira_ticket' => JiraTicket::extract((string) $mr['title']),
             'description' => $mr['description'] === null ? '' : (string) $mr['description'],
@@ -390,16 +391,36 @@ final class ApiBuilder
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, array{id: int, path_with_namespace: string, name: string, avatar_url: string|null}>
      */
-    private function projectPaths(): array
+    private function projectInfos(): array
     {
-        $paths = [];
-        foreach ($this->database->query('SELECT id, path_with_namespace FROM projects') as $row) {
-            $paths[(int) $row['id']] = (string) $row['path_with_namespace'];
+        $infos = [];
+        foreach ($this->database->query('SELECT id, path_with_namespace, name, avatar_url FROM projects') as $row) {
+            $infos[(int) $row['id']] = [
+                'id' => (int) $row['id'],
+                'path_with_namespace' => (string) $row['path_with_namespace'],
+                'name' => (string) $row['name'],
+                'avatar_url' => $row['avatar_url'] === null ? null : (string) $row['avatar_url'],
+            ];
         }
 
-        return $paths;
+        return $infos;
+    }
+
+    /**
+     * @param array<int, array{id: int, path_with_namespace: string, name: string, avatar_url: string|null}> $projects
+     *
+     * @return array{id: int, path_with_namespace: string, name: string, avatar_url: string|null}
+     */
+    private function projectFor(array $projects, int $id): array
+    {
+        return $projects[$id] ?? [
+            'id' => $id,
+            'path_with_namespace' => '',
+            'name' => '',
+            'avatar_url' => null,
+        ];
     }
 
     private function loadDataset(): Dataset

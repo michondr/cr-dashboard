@@ -29,6 +29,40 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
         await page.locator('.col-approvers .avatar, .col-approvers .avatar-fallback').count()
     ).toBeGreaterThanOrEqual(1);
 
+    // The leftmost project column shows the project's avatar (or its initial
+    // when the project has none) and hovers to a project-name tooltip.
+    expect(await page.locator('.mr-header .col-project').count()).toBe(1);
+    const visibleProjects = page.locator('.mr-row .col-project:visible');
+    expect(await visibleProjects.count()).toBeGreaterThanOrEqual(1);
+    expect(
+        await page.locator('.mr-row .col-project .project-avatar, .mr-row .col-project .project-avatar-fallback').count()
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+        await page.locator('.mr-row .col-project .project-avatar-fallback:visible').first().textContent()
+    ).toBe('A');
+    const firstProject = visibleProjects.first();
+    expect(await firstProject.getAttribute('data-tip')).toBe('App');
+    await firstProject.hover();
+    await page.waitForTimeout(200);
+    expect(await firstProject.evaluate((el) => getComputedStyle(el, '::after').content)).toContain('App');
+    // The tooltip is anchored to the right of the avatar cell (the leftmost
+    // column) so it never clips off the left edge, and it stays on-screen.
+    const placement = await firstProject.evaluate((el) => {
+        const style = getComputedStyle(el, '::after');
+        const cell = el.getBoundingClientRect();
+        const leftPx = parseFloat(style.left);
+        return {
+            leftPx: Number.isFinite(leftPx) ? leftPx : null,
+            cellLeft: cell.left,
+            cellRight: cell.right,
+            viewport: window.innerWidth,
+        };
+    });
+    expect(placement.leftPx).not.toBeNull();
+    const tooltipLeftAbs = placement.cellLeft + placement.leftPx;
+    expect(tooltipLeftAbs).toBeGreaterThan(placement.cellRight);
+    expect(tooltipLeftAbs).toBeLessThan(placement.viewport);
+
     // The MR number column is gone (the title still links to the MR).
     expect(await page.locator('.mr-header .col-mr').count()).toBe(0);
 

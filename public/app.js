@@ -321,6 +321,19 @@ function renderMrRow(mr, dimmed) {
         row.classList.add('dim');
     }
 
+    const project = el('span', 'col-project');
+    if (mr.project) {
+        // Hovering the avatar shows the project name (falls back to the path
+        // when an old cache has no display name yet). Only set the tooltip text
+        // when there is something to show, so no empty bubble appears.
+        const projectName = mr.project.name || mr.project.path_with_namespace || '';
+        if (projectName) {
+            project.dataset.tip = projectName;
+        }
+        project.appendChild(avatarImage(mr.project, 'project-avatar'));
+    }
+    row.appendChild(project);
+
     const jira = el('span', 'col-jira');
     if (mr.jira_ticket && state.jiraUrl) {
         const link = el('a');

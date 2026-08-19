@@ -40,7 +40,12 @@ final class SynchronizerTest extends TestCase
     public function testFullSyncStoresMrAndSubResources(): void
     {
         $this->client->projects = [
-            ['id' => 1, 'path_with_namespace' => 'group/proj'],
+            [
+                'id' => 1,
+                'path_with_namespace' => 'group/proj',
+                'name' => 'Proj',
+                'avatar_url' => 'https://gitlab.example.test/uploads/proj/avatar.png',
+            ],
         ];
         $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
@@ -93,6 +98,11 @@ final class SynchronizerTest extends TestCase
         self::assertSame(5, $commit['additions']);
         self::assertSame(2, $commit['deletions']);
         self::assertSame(1, $commit['current']);
+
+        $project = $this->database->query('SELECT path_with_namespace, name, avatar_url FROM projects WHERE id = 1')[0];
+        self::assertSame('group/proj', $project['path_with_namespace']);
+        self::assertSame('Proj', $project['name']);
+        self::assertSame('https://gitlab.example.test/uploads/proj/avatar.png', $project['avatar_url']);
 
         self::assertSame(1, $this->database->queryValue('SELECT COUNT(*) FROM users WHERE id = 1'));
         self::assertNotNull($this->synchronizer->lastSync());

@@ -656,8 +656,14 @@ final class Synchronizer
 
             $projectsById[$id] = $path;
             $this->database->execute(
-                'INSERT OR REPLACE INTO projects (id, path_with_namespace) VALUES (?, ?)',
-                [$id, $path],
+                'INSERT OR REPLACE INTO projects (id, path_with_namespace, name, avatar_url)
+                 VALUES (?, ?, ?, ?)',
+                [
+                    $id,
+                    $path,
+                    $this->stringValue($project, 'name'),
+                    $this->nullableStringValue($project, 'avatar_url'),
+                ],
             );
         }
 

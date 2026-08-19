@@ -17,7 +17,9 @@ final class Schema
 
         $database->execute('CREATE TABLE IF NOT EXISTS projects (
             id INTEGER PRIMARY KEY,
-            path_with_namespace TEXT NOT NULL
+            path_with_namespace TEXT NOT NULL,
+            name TEXT NOT NULL DEFAULT \'\',
+            avatar_url TEXT
         )');
 
         $database->execute('CREATE TABLE IF NOT EXISTS merge_requests (
@@ -105,6 +107,11 @@ final class Schema
         );
         self::addColumnIfMissing($database, 'merge_requests', 'has_conflicts', 'INTEGER NOT NULL DEFAULT 0');
         self::addColumnIfMissing($database, 'discussions', 'resolved', 'INTEGER NOT NULL DEFAULT 1');
+        // Project display name and avatar for the leftmost MR-list column. Old
+        // rows get an empty name (the frontend falls back to the path) and no
+        // avatar until the next sync refreshes them.
+        self::addColumnIfMissing($database, 'projects', 'name', "TEXT NOT NULL DEFAULT ''");
+        self::addColumnIfMissing($database, 'projects', 'avatar_url', 'TEXT');
         // Per-user all-time MR count and the time it was last recomputed, written by
         // the daily `app:rank-users` job. Defaults keep old rows at "0 / never" until
         // the next rank run; sync's UPSERT never wipes them.

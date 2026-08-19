@@ -65,7 +65,7 @@ $database = new Database($config);
 $synchronizer = new Synchronizer($client, $database, $config);
 
 $client->projects = [
-    ['id' => 1, 'path_with_namespace' => 'group/app'],
+    ['id' => 1, 'path_with_namespace' => 'group/app', 'name' => 'App', 'avatar_url' => null],
 ];
 
 $blockedMr = $mr(208, 'opened', $now - (2 * DAY), null, 2, 'REC-204 - Export the web');
