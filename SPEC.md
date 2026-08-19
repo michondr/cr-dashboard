@@ -89,7 +89,18 @@ Widescreen layout (top header row, then sample open MRs):
 
 The Jira ticket links to the Jira issue. The title and the MR number link to the MR in a new tab. The description shows one line with an ellipsis when long and expands to the full text on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; drafts show a "draft" badge. The row never scrolls horizontally; on narrower screens the description column shrinks first.
 
-### 2.3 Metric cell
+### 2.3 My view filter
+
+A "My view" `<select>` in the header (right side) lists every known user (`Name @username`) plus an "Everyone" default. Picking a user adds `?user=<id>` to the URL and re-requests `/api/data` with that param, so the filtered view is bookmarkable — reloading the bookmark re-applies the filter. A "Clear" button next to the select removes the filter.
+
+With a user selected the MR list splits into two labelled tables, separated by a heading bar:
+
+1. **Authored by me** — open MRs whose author is the selected user.
+2. **Awaiting my review** — open MRs not authored by the selected user that they have not yet approved (proxy for "needs my CR"; reviewer assignments are not stored).
+
+MRs the selected user already approved are excluded. The metrics panel is unaffected (it stays a team-wide view). With no filter the list is the single open-MR list with the stale link as above.
+
+### 2.4 Metric cell
 
 ```
 +----------------------+

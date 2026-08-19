@@ -117,10 +117,25 @@ const METRICS = {
     },
 };
 
-let state = { bucket: 'day' };
+let state = { bucket: 'day', userId: readUserIdFromUrl() };
 let usersById = new Map();
 let charts = [];
 let chartData = null;
+
+function readUserIdFromUrl() {
+    const raw = new URLSearchParams(window.location.search).get('user');
+    return raw && /^\d+$/.test(raw) ? raw : null;
+}
+
+function setUrlUser(userId) {
+    const url = new URL(window.location.href);
+    if (userId) {
+        url.searchParams.set('user', userId);
+    } else {
+        url.searchParams.delete('user');
+    }
+    history.replaceState(null, '', url.toString());
+}
 
 function el(tag, className) {
     const node = document.createElement(tag);
@@ -379,6 +394,23 @@ function renderMrList(data) {
     const container = document.getElementById('mr-list');
     container.textContent = '';
 
+    if (state.userId) {
+        const mine = [];
+        const toReview = [];
+        for (const mr of data.mrs) {
+            if (String(mr.author.id) === state.userId) {
+                mine.push(mr);
+            } else {
+                toReview.push(mr);
+            }
+        }
+        mine.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+        toReview.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+        container.appendChild(renderMrSection('Authored by me', mine));
+        container.appendChild(renderMrSection('Awaiting my review', toReview));
+        return;
+    }
+
     const stale = [];
     const body = [];
     for (const mr of data.mrs) {
@@ -407,6 +439,17 @@ function renderMrList(data) {
     for (const mr of body) {
         container.appendChild(renderMrRow(mr, false));
     }
+}
+
+function renderMrSection(label, mrs) {
+    const section = el('div', 'mr-section');
+    const heading = el('div', 'mr-section-heading');
+    heading.textContent = `${label} (${mrs.length})`;
+    section.appendChild(heading);
+    for (const mr of mrs) {
+        section.appendChild(renderMrRow(mr, mr.stale === true));
+    }
+    return section;
 }
 
 function renderHeader(data) {
@@ -617,6 +660,7 @@ function renderStats(data) {
 
 function renderAll(data) {
     renderHeader(data);
+    renderUserFilter(data);
     renderMrList(data);
     renderStats(data);
 }
@@ -634,7 +678,11 @@ function showError(message) {
 async function loadData(bucket) {
     state.bucket = bucket;
     try {
-        const response = await fetch(`/api/data?bucket=${encodeURIComponent(bucket)}`);
+        const params = new URLSearchParams({ bucket });
+        if (state.userId) {
+            params.set('user', state.userId);
+        }
+        const response = await fetch(`/api/data?${params.toString()}`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
@@ -649,7 +697,52 @@ async function loadData(bucket) {
     }
 }
 
+function renderUserFilter(data) {
+    const select = document.getElementById('user-filter-select');
+    const clear = document.getElementById('user-clear');
+    if (!select) {
+        return;
+    }
+    const current = state.userId || '';
+    select.textContent = '';
+    const everyone = el('option');
+    everyone.value = '';
+    everyone.textContent = 'Everyone';
+    select.appendChild(everyone);
+    for (const user of data.users || []) {
+        const opt = el('option');
+        opt.value = String(user.id);
+        opt.textContent = `${user.name} @${user.username}`;
+        select.appendChild(opt);
+    }
+    select.value = current;
+    if (clear) {
+        clear.hidden = !state.userId;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    const select = document.getElementById('user-filter-select');
+    const clear = document.getElementById('user-clear');
+    if (select) {
+        select.addEventListener('change', () => {
+            state.userId = select.value || null;
+            setUrlUser(state.userId);
+            loadData(state.bucket);
+        });
+    }
+    if (clear) {
+        clear.addEventListener('click', () => {
+            state.userId = null;
+            if (select) {
+                select.value = '';
+            }
+            clear.hidden = true;
+            setUrlUser(null);
+            loadData(state.bucket);
+        });
+    }
+
     loadData('day');
     setInterval(() => loadData(state.bucket), REFRESH_MS);
 });

@@ -14,7 +14,9 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     await page.goto('/');
 
     // The MR list renders rows (open MRs only; merged/closed are hidden).
-    await page.waitForSelector('.mr-row');
+    // Wait on a body row (a direct child of the list); stale rows live in a
+    // hidden wrapper and would not satisfy a visibility wait.
+    await page.waitForSelector('#mr-list > .mr-row');
     expect(await page.locator('.mr-row').count()).toBeGreaterThanOrEqual(6);
 
     // A stale MR exists and the stale link renders.
@@ -39,9 +41,27 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     // The sync header shows a last-sync time.
     expect(await page.locator('#sync-status').textContent()).toContain('Last sync:');
 
+    // The "my view" user filter is present and defaults to Everyone.
+    expect(await page.locator('#user-filter-select').count()).toBe(1);
+    expect(await page.locator('#user-filter-select').inputValue()).toBe('');
+
     // Mean/median toggle re-renders without errors.
     await page.locator('.mm-toggle').first().click();
     expect(await page.locator('.cell').count()).toBe(9);
 
     expect(errors).toEqual([]);
+});
+
+test('my view filter splits the list into authored and awaiting review', async ({ page }) => {
+    await page.goto('/?user=1');
+    await page.waitForSelector('.mr-section');
+
+    const headings = await page.locator('.mr-section-heading').allTextContents();
+    expect(headings.length).toBe(2);
+    expect(headings.join(' | ')).toContain('Authored by me');
+    expect(headings.join(' | ')).toContain('Awaiting my review');
+
+    // The bookmarked filter is reflected in the select, and Clear is visible.
+    expect(await page.locator('#user-filter-select').inputValue()).toBe('1');
+    await expect(page.locator('#user-clear')).toBeVisible();
 });

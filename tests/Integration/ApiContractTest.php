@@ -11,6 +11,7 @@ use App\Tests\Support\TestAppConfig;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 
+use function is_array;
 use function json_decode;
 use function time;
 
@@ -178,6 +179,44 @@ final class ApiContractTest extends TestCase
         $first = $metrics['time_to_first_approve'];
         self::assertIsArray($first);
         self::assertSame('hour', $first['bucket']);
+    }
+
+    public function testUserFilterReturnsAuthoredOrUnreviewedMrs(): void
+    {
+        $now = time();
+        // MR 103: open, authored by user 2, no approvals.
+        $this->insertMr(103, 'opened', $now - (3 * self::DAY), null, null, 2, 'REC-2000 - Mine');
+        // MR 104: open, authored by user 1, approved by user 2.
+        $this->insertMr(104, 'opened', $now - (4 * self::DAY), null, null, 1, 'REC-2001 - Done');
+        $this->database->execute(
+            'INSERT INTO approvals (mr_id, user_id, created_at) VALUES (104, 2, ?)',
+            [$now - (2 * self::DAY)],
+        );
+
+        // User 1 (Alice): her MRs (101, 104) plus MRs she has not approved (103).
+        $payload = $this->fetchApiData(['bucket' => 'day', 'user' => '1']);
+        self::assertEqualsCanonicalizing([101, 103, 104], $this->mrIds($payload['mrs']));
+
+        // User 2 (Bob): his MR (103); MRs he already approved (101, 104) are dropped.
+        $payload = $this->fetchApiData(['bucket' => 'day', 'user' => '2']);
+        self::assertEqualsCanonicalizing([103], $this->mrIds($payload['mrs']));
+    }
+
+    /**
+     * @param array<mixed, mixed> $mrs
+     *
+     * @return list<mixed>
+     */
+    private function mrIds(array $mrs): array
+    {
+        $ids = [];
+        foreach ($mrs as $mr) {
+            if (is_array($mr)) {
+                $ids[] = $mr['id'];
+            }
+        }
+
+        return $ids;
     }
 
     /**

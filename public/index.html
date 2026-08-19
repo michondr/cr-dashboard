@@ -10,6 +10,13 @@
     <header class="topbar">
         <h1>Code Review Dashboard</h1>
         <div class="sync-status" id="sync-status">Loading…</div>
+        <div class="user-filter">
+            <label for="user-filter-select" class="user-filter-label">My view</label>
+            <select id="user-filter-select" class="user-filter-select">
+                <option value="">Everyone</option>
+            </select>
+            <button type="button" id="user-clear" class="user-clear" hidden>Clear</button>
+        </div>
     </header>
 
     <main class="layout">

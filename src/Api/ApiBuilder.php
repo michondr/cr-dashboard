@@ -12,6 +12,7 @@ use App\Metrics\PipelineIndicator;
 use App\Storage\Database;
 use App\Sync\Synchronizer;
 
+use function array_key_exists;
 use function count;
 use function gmdate;
 use function rtrim;
@@ -35,9 +36,11 @@ final class ApiBuilder
     }
 
     /**
+     * @param null|int $user Optional "my view" filter for the MR list.
+     *
      * @return array<string, mixed>
      */
-    public function build(string $granularity, int $now): array
+    public function build(string $granularity, int $now, null|int $user = null): array
     {
         $dataset = $this->loadDataset();
 
@@ -49,7 +52,7 @@ final class ApiBuilder
         return [
             'meta' => $this->buildMeta($now),
             'users' => $this->buildUsers($dataset),
-            'mrs' => $this->buildMrs($dataset, $now),
+            'mrs' => $this->buildMrs($dataset, $now, $user),
             'metrics' => $metrics,
         ];
     }
@@ -100,18 +103,45 @@ final class ApiBuilder
      *
      * @return list<array<string, mixed>>
      */
-    private function buildMrs(Dataset $dataset, int $now): array
+    private function buildMrs(Dataset $dataset, int $now, null|int $user): array
     {
         $projectPaths = $this->projectPaths();
+        $approvedByUser = $user === null ? [] : $this->approverMrIdsByUser($dataset, $user);
+
         $rows = [];
         foreach ($dataset->mrs as $mr) {
             if ((string) $mr['state'] !== 'opened') {
                 continue;
             }
+            if ($user !== null) {
+                $mrId = (int) $mr['id'];
+                $isAuthor = (int) $mr['author_id'] === $user;
+                $hasApproved = array_key_exists($mrId, $approvedByUser);
+                // Keep MRs I authored, and MRs I have not reviewed yet (not mine
+                // and not yet approved by me). Drop MRs I already approved.
+                if (!$isAuthor && $hasApproved) {
+                    continue;
+                }
+            }
             $rows[] = $this->buildMrRow($mr, $projectPaths, $dataset, $now);
         }
 
         return $rows;
+    }
+
+    /**
+     * @return array<int, true> MR ids the given user has approved.
+     */
+    private function approverMrIdsByUser(Dataset $dataset, int $user): array
+    {
+        $ids = [];
+        foreach ($dataset->approvals as $approval) {
+            if ((int) $approval['user_id'] === $user) {
+                $ids[(int) $approval['mr_id']] = true;
+            }
+        }
+
+        return $ids;
     }
 
     /**

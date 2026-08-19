@@ -46,6 +46,42 @@ body {
     font-size: 13px;
 }
 
+.user-filter {
+    margin-left: auto;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+.user-filter-label {
+    white-space: nowrap;
+}
+
+.user-filter-select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 13px;
+}
+
+.user-clear {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.user-clear:hover {
+    color: var(--text);
+}
+
 .layout {
     display: flex;
     flex-direction: column;
@@ -203,6 +239,20 @@ body {
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
+}
+
+.mr-section {
+    border-bottom: 1px solid var(--border);
+}
+
+.mr-section-heading {
+    padding: 6px 16px;
+    background: var(--panel-2);
+    color: var(--text-dim);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
 }
 
 .pipe-cell {
