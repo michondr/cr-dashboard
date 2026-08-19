@@ -552,15 +552,31 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-.mm-toggle {
+.seg-control {
     margin-left: auto;
-    background: var(--panel-2);
+    display: flex;
+    flex: 0 0 auto;
     border: 1px solid var(--border);
-    color: var(--text);
     border-radius: 4px;
+    overflow: hidden;
+}
+
+.seg-option {
+    background: var(--panel-2);
+    border: none;
+    color: var(--text-dim);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     padding: 1px 7px;
+}
+
+.seg-option + .seg-option {
+    border-left: 1px solid var(--border);
+}
+
+.seg-option.active {
+    background: var(--accent);
+    color: var(--panel);
 }
 
 .chart-wrap {

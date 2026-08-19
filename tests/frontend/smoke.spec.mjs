@@ -105,8 +105,8 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     // The highest-count user (John Roe, 7) is listed first after "Everyone".
     expect(userOptions[1]).toContain('John Roe');
 
-    // Mean/median toggle re-renders without errors.
-    await page.locator('.mm-toggle').first().click();
+    // Mean/median segmented toggle re-renders without errors.
+    await page.locator('.seg-control .seg-option', { hasText: 'median' }).first().click();
     expect(await page.locator('.cell').count()).toBe(9);
 
     expect(errors).toEqual([]);
@@ -282,11 +282,42 @@ test('cell headers show the latest team-level value and update with the mean/med
     await expect(reviewValue).toBeVisible();
     const before = await reviewValue.textContent();
 
-    await review.locator('.mm-toggle').click();
+    await review.locator('.seg-control .seg-option', { hasText: 'median' }).click();
     await page.waitForTimeout(100);
     const afterReviewValue = page.locator('.cell', { hasText: 'Time to review' }).first().locator('.cell-value');
     await expect(afterReviewValue).toBeVisible();
     expect(await afterReviewValue.textContent()).toMatch(/^·\s*\S/);
+});
+
+test('the mean/median segmented control highlights the active mode and applies to every chart', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+
+    const review = page.locator('.cell', { hasText: 'Time to review' }).first();
+    const seg = review.locator('.seg-control');
+    const meanOption = seg.locator('.seg-option', { hasText: 'mean' });
+    const medianOption = seg.locator('.seg-option', { hasText: 'median' });
+
+    // Defaults to mean, shown active.
+    await expect(meanOption).toHaveClass(/active/);
+    await expect(medianOption).not.toHaveClass(/active/);
+
+    await medianOption.click();
+    await page.waitForTimeout(100);
+
+    // Mode is shared: every meanmedian cell's control now shows median active,
+    // including this same cell after it was rebuilt.
+    const reviewAfter = page.locator('.cell', { hasText: 'Time to review' }).first();
+    const segAfter = reviewAfter.locator('.seg-control');
+    await expect(segAfter.locator('.seg-option', { hasText: 'median' })).toHaveClass(/active/);
+    await expect(segAfter.locator('.seg-option', { hasText: 'mean' })).not.toHaveClass(/active/);
+
+    const otherMeanMedianControls = page.locator('.seg-control');
+    const count = await otherMeanMedianControls.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+        await expect(otherMeanMedianControls.nth(i).locator('.seg-option', { hasText: 'median' })).toHaveClass(/active/);
+    }
 });
 
 test('a poll with unchanged data skips the rebuild', async ({ page }) => {

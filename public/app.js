@@ -1,4 +1,4 @@
-import { getMode, toggleMode } from './toggle.js';
+import { getMode, setMode, MODE_MEAN, MODE_MEDIAN } from './toggle.js';
 import { renderMarkdown } from './markdown.js';
 
 const REFRESH_MS = 60_000;
@@ -666,17 +666,33 @@ function buildCellHeader(meta, metric) {
     header.appendChild(tip);
 
     if (meta.kind === 'meanmedian') {
-        const toggle = el('button', 'mm-toggle');
-        toggle.textContent = '⇄';
-        toggle.title = 'Switch between mean and median';
-        toggle.addEventListener('click', () => {
-            toggleMode();
-            rerenderCharts();
-        });
-        header.appendChild(toggle);
+        header.appendChild(buildModeSegControl());
     }
 
     return header;
+}
+
+function buildModeSegControl() {
+    const control = el('div', 'seg-control');
+    const mode = getMode();
+
+    for (const [value, label] of [[MODE_MEAN, 'mean'], [MODE_MEDIAN, 'median']]) {
+        const option = el('button', 'seg-option');
+        option.type = 'button';
+        option.textContent = label;
+        if (value === mode) {
+            option.classList.add('active');
+        }
+        option.addEventListener('click', () => {
+            if (getMode() !== value) {
+                setMode(value);
+                rerenderCharts();
+            }
+        });
+        control.appendChild(option);
+    }
+
+    return control;
 }
 
 function pickSeries(series, mode) {
