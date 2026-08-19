@@ -595,7 +595,7 @@ function renderHeader(data) {
     if (meta.last_rank_at) {
         const lastRank = Date.parse(meta.last_rank_at);
         const rankAgo = Math.max(0, Math.floor((now - lastRank) / 1000));
-        text += ` · ranks: ${formatRelative(rankAgo)} ago`;
+        text += ` · ranks: ${formatRelative(rankAgo)}`;
     }
 
     node.textContent = text;

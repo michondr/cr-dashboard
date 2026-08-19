@@ -672,6 +672,34 @@ body {
 
    This block is last in the file so its rules win over the base rules above. */
 @media (max-width: 1024px) {
+    /* The topbar wraps to several lines on phones, so the page becomes a
+       flex column and the layout takes the actual space left below it (the
+       desktop calc(100vh - 45px) assumes a single-row topbar and would cut
+       off the bottom of the stats panel). */
+    body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .layout {
+        flex: 1;
+        min-height: 0;
+        height: auto;
+    }
+
+    /* Topbar: the sync info drops onto its own full-width line below the
+       title and the user filter, so the header stays readable on phones. */
+    .topbar {
+        flex-wrap: wrap;
+        gap: 4px 16px;
+    }
+
+    .sync-status {
+        order: 3;
+        flex-basis: 100%;
+        font-size: 12px;
+    }
+
     .mr-panel {
         overflow: auto;
     }
