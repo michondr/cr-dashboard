@@ -108,6 +108,10 @@ $client->approvalsByIid[201] = ['approved_by' => [
     ['user' => $user(3), 'approved_at' => $iso($now - DAY + 3600)],
 ]];
 $client->approvalsByIid[203] = ['approved_by' => []];
+$client->approvalsByIid[204] = ['approved_by' => [
+    ['user' => $user(1), 'approved_at' => $iso($now - 7200)],
+    ['user' => $user(2), 'approved_at' => $iso($now - 3600)],
+]];
 $client->approvalsByIid[206] = ['approved_by' => [
     ['user' => $user(1), 'approved_at' => $iso($now - DAY)],
     ['user' => $user(3), 'approved_at' => $iso($now - 3600)],

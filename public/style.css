@@ -101,7 +101,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 180px 110px 100px 120px 44px 90px;
+    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 288px 110px 100px 120px 44px 90px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -218,16 +218,19 @@ body {
 
 .col-state {
     display: flex;
+    flex-wrap: wrap;
+    align-content: center;
     align-items: center;
-    gap: 4px;
+    gap: 2px 4px;
+    max-height: 28px;
     overflow: hidden;
-    white-space: nowrap;
 }
 
 .badge {
-    padding: 1px 6px;
+    padding: 0 6px;
     border-radius: 9px;
     font-size: 11px;
+    line-height: 1;
     border: 1px solid currentColor;
     color: var(--text-dim);
     white-space: nowrap;

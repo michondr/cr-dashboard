@@ -37,6 +37,13 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     expect(await page.locator('.col-state .status-approved').count()).toBeGreaterThanOrEqual(1);
     expect(await page.locator('.col-state .status-draft').count()).toBeGreaterThanOrEqual(1);
 
+    // A cell can stack two badges (MR 204 is approved and has an unresolved
+    // discussion), wrapping onto a second row instead of clipping.
+    const badgeCounts = await page.locator('.col-state').evaluateAll((cells) =>
+        cells.map((cell) => cell.querySelectorAll('.badge').length)
+    );
+    expect(badgeCounts.some((n) => n >= 2)).toBe(true);
+
     // All nine metric cells render.
     expect(await page.locator('.cell').count()).toBe(9);
 
