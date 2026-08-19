@@ -320,14 +320,6 @@ function renderMrRow(mr, dimmed) {
     }
     row.appendChild(jira);
 
-    const mrCell = el('span', 'col-mr');
-    const mrLink = el('a');
-    mrLink.href = mr.web_url;
-    mrLink.target = '_blank';
-    mrLink.textContent = `#${mr.iid}`;
-    mrCell.appendChild(mrLink);
-    row.appendChild(mrCell);
-
     const title = el('span', 'col-title');
     const titleLink = el('a');
     titleLink.href = mr.web_url;

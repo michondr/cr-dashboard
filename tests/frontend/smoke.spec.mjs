@@ -29,6 +29,9 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
         await page.locator('.col-approvers .avatar, .col-approvers .avatar-fallback').count()
     ).toBeGreaterThanOrEqual(1);
 
+    // The MR number column is gone (the title still links to the MR).
+    expect(await page.locator('.mr-header .col-mr').count()).toBe(0);
+
     // Every status badge renders on at least one MR row.
     expect(await page.locator('.col-state .status-ready').count()).toBeGreaterThanOrEqual(1);
     expect(await page.locator('.col-state .status-stale').count()).toBeGreaterThanOrEqual(1);

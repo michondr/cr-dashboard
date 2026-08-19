@@ -101,7 +101,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 288px 110px 100px 120px 44px 90px;
+    grid-template-columns: 110px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 288px 110px 100px 120px 44px 90px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -131,14 +131,9 @@ body {
 }
 
 .mr-row .col-jira a,
-.mr-row .col-title a,
-.mr-row .col-mr a {
+.mr-row .col-title a {
     color: var(--accent);
     text-decoration: none;
-}
-
-.mr-row .col-mr a {
-    font-variant-numeric: tabular-nums;
 }
 
 .col-title a {
