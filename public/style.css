@@ -670,7 +670,8 @@ body {
    past a container-width box whose border stops at the screen edge. The
    header sticks to the top of the panel while the rows scroll vertically.
 
-   This block is last in the file so its rules win over the base rules above. */
+   This block is last in the file so its rules win over the base rules above
+   (the metrics grid in particular must override .stats-panel). */
 @media (max-width: 1024px) {
     /* The topbar wraps to several lines on phones, so the page becomes a
        flex column and the layout takes the actual space left below it (the
@@ -698,6 +699,13 @@ body {
         order: 3;
         flex-basis: 100%;
         font-size: 12px;
+    }
+
+    /* Metrics: one per row with a usable chart height, scrolled vertically. */
+    .stats-panel {
+        grid-template-columns: 1fr;
+        grid-auto-rows: minmax(200px, auto);
+        overflow-y: auto;
     }
 
     .mr-panel {

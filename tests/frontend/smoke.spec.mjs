@@ -303,3 +303,30 @@ test('on a phone the MR table scrolls as one unit and row borders span every col
     });
     expect(aligned.row).toBe(aligned.header);
 });
+
+test('on a phone the metrics stack one per row and scroll vertically', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+
+    const panel = page.locator('.stats-panel');
+    const dims = await panel.evaluate((el) => ({
+        overflowY: getComputedStyle(el).overflowY,
+        scrollable: el.scrollHeight > el.clientHeight,
+        cols: getComputedStyle(el).gridTemplateColumns,
+    }));
+    expect(dims.overflowY).toBe('auto');
+    expect(dims.scrollable).toBe(true);
+    expect(dims.cols.split(' ').length).toBe(1);
+
+    // Every metric cell spans the full panel width (one per line).
+    const widths = await panel.locator('.cell').evaluateAll((cells) =>
+        cells.map((cell) => Math.round(cell.getBoundingClientRect().width))
+    );
+    expect(widths.length).toBeGreaterThanOrEqual(9);
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+    expect(widths[0]).toBeGreaterThan(300);
+
+    // The charts still render.
+    expect(await panel.locator('canvas').count()).toBeGreaterThanOrEqual(1);
+});
