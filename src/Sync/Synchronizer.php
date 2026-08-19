@@ -311,6 +311,31 @@ final class Synchronizer
         return $ids;
     }
 
+    /**
+     * Identifiers of every cached open MR, for refresh cycles: MRs not in the
+     * GitLab "updated since" list still get their sub-resources re-fetched.
+     *
+     * @return list<array{id: int, project_id: int, iid: int, author_id: int}>
+     */
+    public function openMergeRequestRefs(): array
+    {
+        $rows = $this->database->query(
+            "SELECT id, project_id, iid, author_id FROM merge_requests WHERE state = 'opened'",
+        );
+
+        $refs = [];
+        foreach ($rows as $row) {
+            $refs[] = [
+                'id' => (int) $row['id'],
+                'project_id' => (int) $row['project_id'],
+                'iid' => (int) $row['iid'],
+                'author_id' => (int) $row['author_id'],
+            ];
+        }
+
+        return $refs;
+    }
+
     public function isMergeRequestCached(int $id): bool
     {
         return $this->database->queryValue('SELECT id FROM merge_requests WHERE id = ?', [$id]) !== null;
@@ -370,15 +395,30 @@ final class Synchronizer
             return;
         }
 
+        $this->storeMergeRequestRow($mr);
+        $this->refreshSubResources($id, $projectId, $iid, $this->authorId($mr), $onProgress);
+    }
+
+    /**
+     * Re-fetch every sub-resource of an already-stored MR without touching its
+     * main row. Used for cycle jobs whose MR was not in the GitLab "updated
+     * since" list: the cached row is current, but approvals/discussions can
+     * change without bumping `updated_at`.
+     */
+    public function refreshSubResources(
+        int $id,
+        int $projectId,
+        int $iid,
+        int $authorId,
+        callable $onProgress,
+    ): void {
         $done = 0;
         $expected = 4;
-
-        $this->storeMergeRequestRow($mr);
 
         $this->storeApprovals($id, $this->client->approvals($projectId, $iid));
         $onProgress(++$done, $expected);
 
-        $this->storeDiscussions($id, $this->authorId($mr), $this->client->discussions($projectId, $iid));
+        $this->storeDiscussions($id, $authorId, $this->client->discussions($projectId, $iid));
         $onProgress(++$done, $expected);
 
         $pipelines = $this->client->pipelines($projectId, $iid);

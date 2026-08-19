@@ -34,6 +34,14 @@ final class RefreshWorker
     /** @var array<int, array<array-key, mixed>> mr_id => raw GitLab MR payload, for the running cycle. */
     private array $cyclePayloads = [];
 
+    /**
+     * Cached open MRs queued without a fresh GitLab payload (their main row is
+     * current); only their sub-resources are re-fetched.
+     *
+     * @var array<int, array{id: int, project_id: int, iid: int, author_id: int}>
+     */
+    private array $cycleCachedRefs = [];
+
     public function __construct(
         private readonly RefreshQueue $queue,
         private readonly GitLabClientInterface $client,
@@ -71,6 +79,7 @@ final class RefreshWorker
 
         $allowedProjects = $this->synchronizer->cachedProjectIds();
         $this->cyclePayloads = [];
+        $this->cycleCachedRefs = [];
 
         foreach ($mrs as $mr) {
             if (!is_array($mr)) {
@@ -92,6 +101,22 @@ final class RefreshWorker
             $this->queue->enqueue($id, $isNew, $now);
         }
 
+        // Every other cached open MR joins the cycle too (the "rest" tier):
+        // approvals and discussions can change without bumping `updated_at`,
+        // so the updated-since list alone would leave them stale. Their main
+        // row is current, so they carry a cached ref instead of a payload and
+        // only re-fetch sub-resources.
+        foreach ($this->synchronizer->openMergeRequestRefs() as $ref) {
+            if (array_key_exists($ref['id'], $this->cyclePayloads)) {
+                continue;
+            }
+            if ($allowedProjects !== [] && !array_key_exists($ref['project_id'], $allowedProjects)) {
+                continue;
+            }
+            $this->cycleCachedRefs[$ref['id']] = $ref;
+            $this->queue->enqueue($ref['id'], false, $now);
+        }
+
         $this->publish('refresh', [
             'type' => 'cycle_started',
             'total' => $this->queue->totalCount(),
@@ -109,33 +134,44 @@ final class RefreshWorker
             $this->queue->endCycle($now);
             $this->publish('refresh', ['type' => 'cycle_done', 'total' => $status['total'], 'done' => $status['done']]);
             $this->cyclePayloads = [];
+            $this->cycleCachedRefs = [];
 
             return true;
         }
 
         $mrId = $job['mr_id'];
         $mr = $this->cyclePayloads[$mrId] ?? null;
+        $ref = $this->cycleCachedRefs[$mrId] ?? null;
         $this->queue->markFetching($mrId);
 
-        if ($mr === null) {
+        if ($mr === null && $ref === null) {
             $this->queue->markFailed($mrId);
 
             return true;
         }
 
+        $onProgress = function (int $done, int $expected) use ($mrId): void {
+            $this->queue->recordProgress($mrId, $done, $expected);
+            $this->publish('refresh', [
+                'type' => 'progress',
+                'mr_id' => $mrId,
+                'requests_done' => $done,
+                'requests_expected' => $expected,
+            ]);
+        };
+
         try {
-            $this->synchronizer->syncMergeRequestForRefresh(
-                $mr,
-                function (int $done, int $expected) use ($mrId): void {
-                    $this->queue->recordProgress($mrId, $done, $expected);
-                    $this->publish('refresh', [
-                        'type' => 'progress',
-                        'mr_id' => $mrId,
-                        'requests_done' => $done,
-                        'requests_expected' => $expected,
-                    ]);
-                },
-            );
+            if ($mr !== null) {
+                $this->synchronizer->syncMergeRequestForRefresh($mr, $onProgress);
+            } else {
+                $this->synchronizer->refreshSubResources(
+                    $ref['id'],
+                    $ref['project_id'],
+                    $ref['iid'],
+                    $ref['author_id'],
+                    $onProgress,
+                );
+            }
             $this->queue->markDone($mrId);
             $this->publish('refresh', ['type' => 'done', 'mr_id' => $mrId]);
             $this->publish('data', ['type' => 'changed', 'mr_id' => $mrId]);

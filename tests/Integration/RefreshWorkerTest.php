@@ -113,6 +113,41 @@ final class RefreshWorkerTest extends TestCase
         self::assertTrue($job['is_new']);
     }
 
+    public function testCachedOpenMrsNotInTheUpdatedListStillJoinTheCycle(): void
+    {
+        $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
+        $this->seedCachedMr(102, 2, updated: '2026-07-01T09:00:00+00:00');
+        // Only 101 was updated since the last sync; 102 must still be queued
+        // (approvals/discussions can change without bumping updated_at).
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, '2026-08-05T09:00:00+00:00'),
+        ];
+
+        $this->queue->requestCycle(1000, null);
+        $this->worker->tick(1000);
+
+        self::assertSame(
+            2,
+            (int) $this->database->queryValue('SELECT COUNT(*) FROM refresh_queue'),
+        );
+
+        while ($this->queue->isActive()) {
+            $this->worker->tick(1001);
+        }
+
+        self::assertSame('done', $this->database->queryValue('SELECT state FROM refresh_queue WHERE mr_id = 101'));
+        self::assertSame('done', $this->database->queryValue('SELECT state FROM refresh_queue WHERE mr_id = 102'));
+
+        $doneIds = array_column(
+            array_values(array_filter(
+                $this->hub->published,
+                static fn (array $event): bool => $event['topic'] === 'refresh' && $event['data']['type'] === 'done',
+            )),
+            'data',
+        );
+        self::assertCount(2, $doneIds);
+    }
+
     public function testCycleStartedBroadcastsTheOrderedQueuedMrIds(): void
     {
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
