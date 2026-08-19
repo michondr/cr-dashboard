@@ -118,7 +118,7 @@ const METRICS = {
     },
 };
 
-let state = { bucket: 'day', userId: readUserIdFromUrl() };
+let state = { bucket: 'day', userId: readUserIdFromUrl(), focusedMetricKey: null };
 let usersById = new Map();
 let charts = [];
 let chartData = null;
@@ -662,10 +662,12 @@ function latestTeamValue(metric, mode) {
     return null;
 }
 
-function buildCellHeader(meta, metric) {
+function buildCellHeader(meta, metric, key, cell) {
     const header = el('div', 'cell-header');
     const title = el('span', 'cell-title');
     title.textContent = meta.title;
+    title.title = 'Click to expand';
+    title.addEventListener('click', () => toggleFocusedCell(key, cell));
     header.appendChild(title);
 
     const teamValue = latestTeamValue(metric, getMode());
@@ -964,6 +966,19 @@ function resetZoom() {
     }
 }
 
+// Only one cell can be focused (expanded) at a time; clicking its title again,
+// clicking another cell's title, or pressing Escape collapses it. The
+// existing per-cell ResizeObserver (see createChart) resizes the chart when
+// the CSS grid change resizes the cell.
+function toggleFocusedCell(key, cell) {
+    const wasFocused = state.focusedMetricKey === key;
+    document.querySelectorAll('.cell.focused').forEach((c) => c.classList.remove('focused'));
+    state.focusedMetricKey = wasFocused ? null : key;
+    if (!wasFocused && cell) {
+        cell.classList.add('focused');
+    }
+}
+
 function renderStats(data) {
     for (const chart of charts) {
         if (chart) {
@@ -977,7 +992,10 @@ function renderStats(data) {
 
     for (const [key, meta] of Object.entries(METRICS)) {
         const cell = el('section', 'cell');
-        cell.appendChild(buildCellHeader(meta, data.metrics[key]));
+        if (key === state.focusedMetricKey) {
+            cell.classList.add('focused');
+        }
+        cell.appendChild(buildCellHeader(meta, data.metrics[key], key, cell));
         const wrap = el('div', 'chart-wrap');
         cell.appendChild(wrap);
         panel.appendChild(cell);
@@ -1082,6 +1100,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loadData(state.bucket);
         });
     }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && state.focusedMetricKey) {
+            toggleFocusedCell(state.focusedMetricKey, null);
+        }
+    });
 
     loadData('day');
     setInterval(() => loadData(state.bucket), REFRESH_MS);

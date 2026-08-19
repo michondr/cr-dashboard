@@ -559,3 +559,50 @@ test('tap support on touch: chart tooltip, tip-icon, and description toggles sho
         await expect(page.locator('.desc-tip')).toBeHidden();
     }
 });
+
+test('clicking a cell title expands it to focus mode; clicking again or Escape collapses it', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+    await page.waitForTimeout(500);
+
+    const panel = page.locator('#stats-panel');
+    const panelWidth = await panel.evaluate((el) => el.clientWidth);
+
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const beforeBox = await coverage.boundingBox();
+    expect(beforeBox.width).toBeLessThan(panelWidth * 0.5);
+
+    await coverage.locator('.cell-title').click();
+    await page.waitForTimeout(200);
+
+    // Only one cell is focused, and it now spans (close to) the full panel
+    // width and is markedly taller than before.
+    expect(await page.locator('.cell.focused').count()).toBe(1);
+    await expect(coverage).toHaveClass(/focused/);
+    const afterBox = await coverage.boundingBox();
+    expect(afterBox.width).toBeGreaterThan(panelWidth * 0.8);
+    expect(afterBox.height).toBeGreaterThan(beforeBox.height * 1.5);
+
+    // The chart resized along with the cell (canvas grew).
+    const canvasWidth = await coverage.locator('canvas').first().evaluate((c) => c.getBoundingClientRect().width);
+    expect(canvasWidth).toBeGreaterThan(beforeBox.width);
+
+    // Focusing a different cell moves the focus (only one at a time).
+    const firstResponse = page.locator('.cell', { hasText: 'First response time' }).first();
+    await firstResponse.locator('.cell-title').click();
+    await page.waitForTimeout(200);
+    expect(await page.locator('.cell.focused').count()).toBe(1);
+    await expect(firstResponse).toHaveClass(/focused/);
+    await expect(coverage).not.toHaveClass(/focused/);
+
+    // Escape collapses the focused cell.
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
+    expect(await page.locator('.cell.focused').count()).toBe(0);
+
+    // Clicking the same title again toggles focus back off.
+    await coverage.locator('.cell-title').click();
+    await expect(coverage).toHaveClass(/focused/);
+    await coverage.locator('.cell-title').click();
+    await expect(coverage).not.toHaveClass(/focused/);
+});

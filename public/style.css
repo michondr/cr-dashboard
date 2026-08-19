@@ -501,6 +501,22 @@ body {
     flex-direction: column;
 }
 
+/* Click-to-expand focus mode: the cell spans the full stats-panel width and
+   roughly doubles its row height; the rest of the grid reflows below it.
+   With grid-auto-rows: 1fr the row tracks split the panel evenly regardless
+   of span, so switch to content-sized rows (with a floor) while any cell is
+   focused, and let the panel scroll if that grows taller than the viewport. */
+.stats-panel:has(.cell.focused) {
+    grid-auto-rows: minmax(170px, auto);
+    overflow-y: auto;
+}
+
+.cell.focused {
+    grid-column: 1 / -1;
+    grid-row: span 2;
+    z-index: 1;
+}
+
 .cell-header {
     display: flex;
     align-items: center;
@@ -517,6 +533,7 @@ body {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    cursor: pointer;
 }
 
 .cell-value {
