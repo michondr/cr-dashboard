@@ -87,6 +87,20 @@ final class Schema
             value TEXT NOT NULL
         )');
 
+        // Per-cycle refresh queue for the SSE live-refresh worker (app:refresh-worker).
+        // Wiped and repopulated at the start of every cycle; `state` progresses
+        // queued -> fetching -> done|failed. `is_new` marks an MR id discovered
+        // by the cycle's list call that was not yet cached (sorted to the front).
+        $database->execute('CREATE TABLE IF NOT EXISTS refresh_queue (
+            mr_id INTEGER PRIMARY KEY,
+            is_new INTEGER NOT NULL DEFAULT 0,
+            state TEXT NOT NULL DEFAULT \'queued\',
+            requests_done INTEGER NOT NULL DEFAULT 0,
+            requests_expected INTEGER NOT NULL DEFAULT 4,
+            enqueued_at INTEGER NOT NULL
+        )');
+        $database->execute('CREATE INDEX IF NOT EXISTS idx_refresh_queue_state ON refresh_queue (state)');
+
         $database->execute('CREATE INDEX IF NOT EXISTS idx_merge_requests_project ON merge_requests (project_id)');
         $database->execute('CREATE INDEX IF NOT EXISTS idx_approvals_mr ON approvals (mr_id)');
         $database->execute('CREATE INDEX IF NOT EXISTS idx_discussions_mr ON discussions (mr_id)');

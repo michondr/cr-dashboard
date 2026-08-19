@@ -295,6 +295,37 @@ final class Synchronizer
     }
 
     /**
+     * Project ids already cached in `projects` (i.e. allowed by GITLAB_PROJECTS
+     * as of the last project fetch). Used by the refresh worker to filter its
+     * cheap list call without an extra GitLab request.
+     *
+     * @return array<int, true>
+     */
+    public function cachedProjectIds(): array
+    {
+        $ids = [];
+        foreach ($this->database->query('SELECT id FROM projects') as $row) {
+            $ids[(int) $row['id']] = true;
+        }
+
+        return $ids;
+    }
+
+    public function isMergeRequestCached(int $id): bool
+    {
+        return $this->database->queryValue('SELECT id FROM merge_requests WHERE id = ?', [$id]) !== null;
+    }
+
+    /**
+     * Drops a merge request and all its sub-resources from the cache (used by
+     * the refresh worker when its list call observes a closed transition).
+     */
+    public function removeMergeRequest(int $id): void
+    {
+        $this->deleteMergeRequest($id);
+    }
+
+    /**
      * Delete merged/closed MRs whose merge/close time is older than
      * `RETENTION_DAYS`, together with all their sub-resources.
      */
@@ -320,9 +351,17 @@ final class Synchronizer
     }
 
     /**
+     * Same sub-resource fetch as {@see syncMergeRequest()}, but reports
+     * progress after each step for the refresh worker (`App\Refresh\RefreshWorker`)
+     * to publish as Mercure events. `requests_expected` starts at 4 (one call
+     * per sub-resource) and is corrected once pipelines/commits are known:
+     * +1 per running/pending pipeline (a jobs call) and +1 per not-yet-cached
+     * commit sha (a commit-stats call).
+     *
      * @param array<array-key, mixed> $mr
+     * @param callable(int $requestsDone, int $requestsExpected): void $onProgress
      */
-    private function syncMergeRequest(array $mr): void
+    public function syncMergeRequestForRefresh(array $mr, callable $onProgress): void
     {
         $id = $this->intValue($mr, 'id');
         $projectId = $this->intValue($mr, 'project_id');
@@ -331,11 +370,77 @@ final class Synchronizer
             return;
         }
 
+        $done = 0;
+        $expected = 4;
+
         $this->storeMergeRequestRow($mr);
+
         $this->storeApprovals($id, $this->client->approvals($projectId, $iid));
+        $onProgress(++$done, $expected);
+
         $this->storeDiscussions($id, $this->authorId($mr), $this->client->discussions($projectId, $iid));
-        $this->storePipelinesAndJobs($id, $projectId, $this->client->pipelines($projectId, $iid));
-        $this->storeCommits($id, $projectId, $this->client->commits($projectId, $iid));
+        $onProgress(++$done, $expected);
+
+        $pipelines = $this->client->pipelines($projectId, $iid);
+        foreach ($pipelines as $pipeline) {
+            if (!is_array($pipeline)) {
+                continue;
+            }
+            $status = $this->stringValue($pipeline, 'status');
+            if ($status === 'running' || $status === 'pending') {
+                $expected++;
+            }
+        }
+        $onProgress($done, $expected);
+        $this->storePipelinesAndJobs($id, $projectId, $pipelines);
+        $onProgress(++$done, $expected);
+
+        $commits = $this->client->commits($projectId, $iid);
+        $expected += $this->countUncachedShas($id, $commits);
+        $onProgress($done, $expected);
+        $this->storeCommits($id, $projectId, $commits);
+        $onProgress(++$done, $expected);
+    }
+
+    /**
+     * @param array<array-key, mixed> $mr
+     */
+    private function syncMergeRequest(array $mr): void
+    {
+        $this->syncMergeRequestForRefresh($mr, static function (int $done, int $expected): void {
+        });
+    }
+
+    /**
+     * Number of shas in `$commits` not already cached for this MR — each one
+     * costs one `commitStats` call in {@see storeCommits()}.
+     *
+     * @param list<array<string, mixed>> $commits
+     */
+    private function countUncachedShas(int $mrId, array $commits): int
+    {
+        $seen = [];
+        $count = 0;
+        foreach ($commits as $commit) {
+            if (!is_array($commit)) {
+                continue;
+            }
+            $sha = $this->stringValue($commit, 'id');
+            if ($sha === '' || array_key_exists($sha, $seen)) {
+                continue;
+            }
+            $seen[$sha] = true;
+
+            $existing = $this->database->queryValue(
+                'SELECT id FROM commits WHERE mr_id = ? AND sha = ?',
+                [$mrId, $sha],
+            );
+            if ($existing === null) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /**

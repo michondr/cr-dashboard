@@ -30,6 +30,34 @@ final class SlackNotifier
     ) {
     }
 
+    /**
+     * Posts the "new MR" message immediately when the refresh worker's cycle
+     * list call discovers an MR id not yet cached (item 3), rather than
+     * waiting for the nightly run. Bumps `last_notify` forward to (at least)
+     * this MR's `created_at` so the nightly run's `newMrsSince()` diff does
+     * not notify about it again.
+     */
+    public function notifyNewMr(int $mrId): void
+    {
+        if ($this->config->slackToken === '' || $this->config->slackChannel === '') {
+            return;
+        }
+
+        $row = $this->database->query('SELECT * FROM merge_requests WHERE id = ?', [$mrId]);
+        if ($row === []) {
+            return;
+        }
+
+        $mr = $this->decorateMr($row[0]);
+        $this->post($this->formatNewMrs([$mr]));
+
+        $createdAt = (int) $row[0]['created_at'];
+        $lastNotify = $this->getLastNotify($createdAt);
+        if ($createdAt > $lastNotify) {
+            $this->setLastNotify($createdAt);
+        }
+    }
+
     public function notify(int $now, null|string $syncFailure = null): void
     {
         if ($this->config->slackToken === '' || $this->config->slackChannel === '') {
