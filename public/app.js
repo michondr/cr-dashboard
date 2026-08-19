@@ -329,6 +329,14 @@ function renderMrRow(mr, dimmed) {
     ));
     row.appendChild(first);
 
+    const approvers = el('span', 'col-approvers');
+    if (mr.approvers) {
+        for (const approver of mr.approvers) {
+            renderAvatar(approvers, approver.name, approver.avatar_url);
+        }
+    }
+    row.appendChild(approvers);
+
     const pipe = el('span', 'col-pipe');
     pipe.appendChild(renderPipeline(mr.pipeline));
     row.appendChild(pipe);

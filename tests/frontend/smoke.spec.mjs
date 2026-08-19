@@ -21,6 +21,12 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     await page.waitForSelector('.stale-link');
     expect(await page.locator('.stale-link').textContent()).toContain('stale Merge Requests');
 
+    // The Approvers column renders approver avatars.
+    expect(await page.locator('.mr-header .col-approvers').count()).toBe(1);
+    expect(
+        await page.locator('.col-approvers .avatar, .col-approvers .avatar-fallback').count()
+    ).toBeGreaterThanOrEqual(1);
+
     // All nine metric cells render.
     expect(await page.locator('.cell').count()).toBe(9);
 

@@ -65,7 +65,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 120px 110px 100px 44px 90px;
+    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 120px 110px 100px 120px 44px 90px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -136,6 +136,25 @@ body {
     align-items: center;
     gap: 6px;
     white-space: nowrap;
+}
+
+.col-approvers {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.col-approvers .avatar,
+.col-approvers .avatar-fallback {
+    margin-left: -6px;
+    border: 1px solid var(--panel);
+    z-index: 1;
+}
+
+.col-approvers .avatar:first-child,
+.col-approvers .avatar-fallback:first-child {
+    margin-left: 0;
 }
 
 .avatar {
