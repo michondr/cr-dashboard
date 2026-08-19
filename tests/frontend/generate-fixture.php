@@ -173,6 +173,11 @@ $client->commitStatsBySha['fff666'] = ['stats' => ['additions' => 15, 'deletions
 
 $synchronizer->full($now);
 
+// Rank users so the fixture demonstrates the by-MR-count dropdown ordering:
+// John Roe (7), Jane Doe (4), Ann Lee (2).
+$client->mrCountByAuthor = [1 => 4, 2 => 7, 3 => 2];
+$synchronizer->rankUsers($now);
+
 $builder = new ApiBuilder($database, new MetricCalculator(), $config, $synchronizer);
 $payload = $builder->build('day', $now);
 

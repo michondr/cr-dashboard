@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Tests\Support;
 
 use App\GitLab\GitLabClientInterface;
+use App\GitLab\GitLabException;
+
+use function array_key_exists;
 
 final class FakeGitLabClient implements GitLabClientInterface
 {
@@ -52,6 +55,17 @@ final class FakeGitLabClient implements GitLabClientInterface
     public int $groupMergeRequestsCalls = 0;
     public int $jobsCalls = 0;
     public int $commitStatsCalls = 0;
+    public int $authorMergeRequestCountCalls = 0;
+
+    /**
+     * @var array<int, int>
+     */
+    public array $mrCountByAuthor = [];
+
+    /**
+     * @var array<int, GitLabException>
+     */
+    public array $mrCountErrorsByAuthor = [];
 
     /**
      * @var list<array<string, mixed>>
@@ -140,5 +154,15 @@ final class FakeGitLabClient implements GitLabClientInterface
     public function rawGet(string $path, array $query = []): array
     {
         return ['status' => 200, 'body' => '', 'seconds' => 0.0];
+    }
+
+    public function authorMergeRequestCount(int $authorId): int
+    {
+        $this->authorMergeRequestCountCalls++;
+        if (array_key_exists($authorId, $this->mrCountErrorsByAuthor)) {
+            throw $this->mrCountErrorsByAuthor[$authorId];
+        }
+
+        return $this->mrCountByAuthor[$authorId] ?? 0;
     }
 }

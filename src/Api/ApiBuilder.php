@@ -27,6 +27,9 @@ use const DATE_ATOM;
  */
 final class ApiBuilder
 {
+    /** User ranking refresh cadence (matches the daily `app:rank-users` cron). */
+    private const RANK_INTERVAL_SECONDS = 86400;
+
     public function __construct(
         private readonly Database $database,
         private readonly MetricCalculator $calculator,
@@ -64,6 +67,7 @@ final class ApiBuilder
     {
         $lastSync = $this->synchronizer->lastSync();
         $cacheAge = $lastSync === null ? null : $now - $lastSync;
+        $lastRank = $this->synchronizer->lastRank();
 
         return [
             'required_approvals' => $this->config->requiredApprovals,
@@ -75,11 +79,13 @@ final class ApiBuilder
             'cache_age_seconds' => $cacheAge,
             'last_sync_at' => $lastSync === null ? null : $this->iso($lastSync),
             'next_sync_at' => $lastSync === null ? null : $this->iso($lastSync + AppConfig::SYNC_INTERVAL_SECONDS),
+            'last_rank_at' => $lastRank === null ? null : $this->iso($lastRank),
+            'next_rank_at' => $lastRank === null ? null : $this->iso($lastRank + self::RANK_INTERVAL_SECONDS),
         ];
     }
 
     /**
-     * @return list<array{id: int, name: string, username: string, avatar_url: string|null}>
+     * @return list<array{id: int, name: string, username: string, avatar_url: string|null, mr_count: int}>
      */
     private function buildUsers(Dataset $dataset): array
     {
@@ -90,6 +96,7 @@ final class ApiBuilder
                 'name' => (string) $user['name'],
                 'username' => (string) $user['username'],
                 'avatar_url' => $user['avatar_url'] === null ? null : (string) $user['avatar_url'],
+                'mr_count' => (int) ($user['mr_count'] ?? 0),
             ];
         }
 
@@ -398,7 +405,7 @@ final class ApiBuilder
     private function loadDataset(): Dataset
     {
         return new Dataset(
-            $this->database->query('SELECT * FROM users'),
+            $this->database->query('SELECT * FROM users ORDER BY mr_count DESC, name ASC'),
             $this->database->query('SELECT * FROM merge_requests'),
             $this->database->query('SELECT * FROM approvals'),
             $this->database->query('SELECT * FROM discussions'),

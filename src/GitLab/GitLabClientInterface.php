@@ -49,6 +49,12 @@ interface GitLabClientInterface
     public function commitStats(int $projectId, string $sha): array;
 
     /**
+     * All-time merge request count authored by the given user within the configured
+     * group. Used by the daily user-ranking job.
+     */
+    public function authorMergeRequestCount(int $authorId): int;
+
+    /**
      * Performs a GET without throwing on a non-2xx response, returning the raw
      * status, body and elapsed seconds. A transport failure yields status 0.
      *

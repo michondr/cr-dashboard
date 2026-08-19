@@ -505,7 +505,15 @@ function renderHeader(data) {
     const lastAgo = Math.max(0, Math.floor((now - lastSync) / 1000));
     const until = Math.max(0, Math.floor((nextSync - now) / 1000));
 
-    node.textContent = `Last sync: ${formatRelative(lastAgo)} · next sync: ${formatUntil(until)}`;
+    let text = `Last sync: ${formatRelative(lastAgo)} · next sync: ${formatUntil(until)}`;
+
+    if (meta.last_rank_at) {
+        const lastRank = Date.parse(meta.last_rank_at);
+        const rankAgo = Math.max(0, Math.floor((now - lastRank) / 1000));
+        text += ` · ranks: ${formatRelative(rankAgo)} ago`;
+    }
+
+    node.textContent = text;
 }
 
 function buildCellHeader(meta) {
@@ -807,7 +815,7 @@ function renderUserFilter(data) {
     for (const user of data.users || []) {
         const opt = el('option');
         opt.value = String(user.id);
-        opt.textContent = `${user.name} @${user.username}`;
+        opt.textContent = `${user.name} (${user.mr_count ?? 0}) @${user.username}`;
         select.appendChild(opt);
     }
     select.value = current;

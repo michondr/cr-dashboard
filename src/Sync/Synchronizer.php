@@ -9,6 +9,7 @@ use App\GitLab\GitLabClientInterface;
 use App\GitLab\GitLabException;
 use App\Storage\Database;
 use Symfony\Component\Console\Output\OutputInterface;
+use Throwable;
 
 use function array_key_exists;
 use function count;
@@ -47,6 +48,71 @@ final class Synchronizer
         $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'last_sync'");
 
         return $value === null ? null : (int) $value;
+    }
+
+    /**
+     * Epoch time the user ranking was last recomputed, or null when never run.
+     */
+    public function lastRank(): null|int
+    {
+        $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'last_rank_at'");
+
+        return $value === null ? null : (int) $value;
+    }
+
+    /**
+     * Recompute each user's all-time MR count from GitLab and persist it to
+     * `users.mr_count` / `users.ranked_at`. Best-effort: a per-user GitLab failure keeps
+     * that user's previous count and the run continues, so one unreachable user cannot
+     * blank the ranking. Runs without the sync lock (it is not a sync) and never wipes a
+     * count it could not refresh.
+     */
+    public function rankUsers(int $now, null|OutputInterface $output = null): void
+    {
+        $this->output = $output;
+
+        $rows = $this->database->query('SELECT id FROM users');
+        $total = count($rows);
+        $this->report(sprintf('Ranking users: fetching all-time MR counts for %d user(s)...', $total));
+
+        $succeeded = 0;
+        $failed = 0;
+        $updates = [];
+        foreach ($rows as $row) {
+            $id = (int) $row['id'];
+            try {
+                $count = $this->client->authorMergeRequestCount($id);
+            } catch (GitLabException $e) {
+                $failed++;
+                $this->report(sprintf('  user %d: keeping previous count (%s)', $id, $e->getMessage()));
+
+                continue;
+            }
+
+            $updates[] = [$id, $count];
+            $succeeded++;
+        }
+
+        $this->database->begin();
+        try {
+            foreach ($updates as [$id, $count]) {
+                $this->database->execute(
+                    'UPDATE users SET mr_count = ?, ranked_at = ? WHERE id = ?',
+                    [$count, $now, $id],
+                );
+            }
+            $this->setSyncState('last_rank_at', (string) $now);
+            $this->database->commit();
+        } catch (Throwable $e) {
+            $this->database->rollback();
+            throw $e;
+        }
+
+        $this->report(sprintf(
+            '  ranked %d user(s); %d failed and kept their previous count.',
+            $succeeded,
+            $failed,
+        ));
     }
 
     /**
@@ -667,7 +733,9 @@ final class Synchronizer
         }
 
         $this->database->execute(
-            'INSERT OR REPLACE INTO users (id, name, username, avatar_url) VALUES (?, ?, ?, ?)',
+            'INSERT INTO users (id, name, username, avatar_url) VALUES (?, ?, ?, ?)'
+            . ' ON CONFLICT(id) DO UPDATE SET name = excluded.name,'
+            . ' username = excluded.username, avatar_url = excluded.avatar_url',
             [
                 $id,
                 $this->stringValue($user, 'name'),

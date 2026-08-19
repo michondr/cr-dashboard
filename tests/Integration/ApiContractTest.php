@@ -92,6 +92,11 @@ final class ApiContractTest extends TestCase
         $users = $payload['users'];
         self::assertIsArray($users);
         self::assertCount(2, $users);
+        foreach ($users as $user) {
+            self::assertIsArray($user);
+            self::assertArrayHasKey('mr_count', $user);
+            self::assertIsInt($user['mr_count']);
+        }
 
         self::assertArrayHasKey('mrs', $payload);
         $mrs = $payload['mrs'];
@@ -205,6 +210,40 @@ final class ApiContractTest extends TestCase
         // User 2 (Bob): his MR (103); MRs he already approved (101, 104) are dropped.
         $payload = $this->fetchApiData(['bucket' => 'day', 'user' => '2']);
         self::assertEqualsCanonicalizing([103], $this->mrIds($payload['mrs']));
+    }
+
+    public function testUsersOrderedByMrCountThenName(): void
+    {
+        // Bob ranks highest, Alice and Carol tie at 1 (name asc: Alice before Carol),
+        // Dave has none and sorts last by name.
+        $this->database->execute(
+            'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (3, ?, ?, NULL, 1)',
+            ['Carol', 'carol'],
+        );
+        $this->database->execute(
+            'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (4, ?, ?, NULL, 0)',
+            ['Dave', 'dave'],
+        );
+        $this->database->execute('UPDATE users SET mr_count = 5 WHERE id = 2');
+        $this->database->execute('UPDATE users SET mr_count = 1 WHERE id = 1');
+        $now = time();
+        $this->database->execute(
+            "INSERT INTO sync_state (key, value) VALUES ('last_rank_at', ?)",
+            [(string) $now],
+        );
+
+        $payload = $this->fetchApiData(['bucket' => 'day']);
+        $ids = [];
+        foreach ($payload['users'] as $user) {
+            self::assertIsArray($user);
+            self::assertIsInt($user['id']);
+            $ids[] = $user['id'];
+        }
+        self::assertSame([2, 1, 3, 4], $ids);
+
+        $meta = $payload['meta'];
+        self::assertIsString($meta['last_rank_at']);
+        self::assertIsString($meta['next_rank_at']);
     }
 
     /**

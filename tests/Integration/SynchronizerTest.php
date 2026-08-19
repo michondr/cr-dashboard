@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Integration;
 
 use App\Config\AppConfig;
+use App\GitLab\GitLabException;
 use App\Storage\Database;
 use App\Sync\Synchronizer;
 use App\Sync\SyncLockedException;
@@ -425,6 +426,51 @@ final class SynchronizerTest extends TestCase
         self::assertSame(0, $resolved[0]['resolved']);
         self::assertSame(3, $resolved[1]['user_id']);
         self::assertSame(1, $resolved[1]['resolved']);
+    }
+
+    public function testStoreUserPreservesMrCountOnResync(): void
+    {
+        // A pre-ranked user (mr_count = 5) is re-touched by a sync that re-stores it.
+        // The UPSERT must refresh name/username/avatar but leave the rank intact.
+        $this->database->execute(
+            'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (1, ?, ?, NULL, 5)',
+            ['User 1', 'user1'],
+        );
+
+        $this->seedSingleMrWithApprovals([2]);
+        $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
+
+        self::assertSame(5, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 1'));
+    }
+
+    public function testRankUsersUpdatesCountsAndIsBestEffort(): void
+    {
+        $this->database->execute(
+            'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (1, ?, ?, NULL, 0)',
+            ['Alice', 'alice'],
+        );
+        $this->database->execute(
+            'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (2, ?, ?, NULL, 0)',
+            ['Bob', 'bob'],
+        );
+        // User 3 already has a count; GitLab will fail for it, so the count must stay.
+        $this->database->execute(
+            'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (3, ?, ?, NULL, 9)',
+            ['Carol', 'carol'],
+        );
+
+        $this->client->mrCountByAuthor = [1 => 7, 2 => 3];
+        $this->client->mrCountErrorsByAuthor[3] = new GitLabException('boom');
+
+        $now = (int) strtotime('2026-08-10T12:00:00+00:00');
+        $this->synchronizer->rankUsers($now);
+
+        self::assertSame(7, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 1'));
+        self::assertSame(3, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 2'));
+        self::assertSame(9, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 3'));
+        self::assertSame($now, $this->database->queryValue("SELECT ranked_at FROM users WHERE id = 1"));
+        self::assertSame($now, $this->synchronizer->lastRank());
+        self::assertSame(3, $this->client->authorMergeRequestCountCalls);
     }
 
     protected function tearDown(): void

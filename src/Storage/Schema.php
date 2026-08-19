@@ -105,6 +105,11 @@ final class Schema
         );
         self::addColumnIfMissing($database, 'merge_requests', 'has_conflicts', 'INTEGER NOT NULL DEFAULT 0');
         self::addColumnIfMissing($database, 'discussions', 'resolved', 'INTEGER NOT NULL DEFAULT 1');
+        // Per-user all-time MR count and the time it was last recomputed, written by
+        // the daily `app:rank-users` job. Defaults keep old rows at "0 / never" until
+        // the next rank run; sync's UPSERT never wipes them.
+        self::addColumnIfMissing($database, 'users', 'mr_count', 'INTEGER NOT NULL DEFAULT 0');
+        self::addColumnIfMissing($database, 'users', 'ranked_at', 'INTEGER');
     }
 
     /**

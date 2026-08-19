@@ -58,12 +58,18 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     // The pipeline indicator shows a running (spinner) pipeline on MR 204.
     expect(await page.locator('.pipe.spinner').count()).toBe(1);
 
-    // The sync header shows a last-sync time.
+    // The sync header shows a last-sync time and the daily rank refresh time.
     expect(await page.locator('#sync-status').textContent()).toContain('Last sync:');
+    expect(await page.locator('#sync-status').textContent()).toContain('ranks:');
 
-    // The "my view" user filter is present and defaults to Everyone.
+    // The "my view" user filter is present and defaults to Everyone, and each
+    // user option shows their all-time MR count (ordered by it, desc).
     expect(await page.locator('#user-filter-select').count()).toBe(1);
     expect(await page.locator('#user-filter-select').inputValue()).toBe('');
+    const userOptions = await page.locator('#user-filter-select option').allTextContents();
+    expect(userOptions.some((t) => /\(\d+\)/.test(t))).toBe(true);
+    // The highest-count user (John Roe, 7) is listed first after "Everyone".
+    expect(userOptions[1]).toContain('John Roe');
 
     // Mean/median toggle re-renders without errors.
     await page.locator('.mm-toggle').first().click();

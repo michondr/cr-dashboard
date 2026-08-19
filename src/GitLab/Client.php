@@ -7,6 +7,8 @@ namespace App\GitLab;
 use App\Config\AppConfig;
 use RuntimeException;
 
+use function count;
+use function ctype_digit;
 use function curl_error;
 use function curl_exec;
 use function curl_getinfo;
@@ -21,7 +23,9 @@ use function microtime;
 use function rawurlencode;
 use function rtrim;
 use function sprintf;
+use function str_starts_with;
 use function strlen;
+use function strtolower;
 use function substr;
 use function trim;
 use function usleep;
@@ -118,6 +122,39 @@ final class Client implements GitLabClientInterface
     public function commitStats(int $projectId, string $sha): array
     {
         return $this->getMap('projects/' . $projectId . '/repository/commits/' . $sha, ['stats' => 'true']);
+    }
+
+    /**
+     * All-time merge request count authored by the given user within the configured
+     * group. Reads the `X-Total` header from a `per_page=1` probe (one request); falls
+     * back to paginating `per_page=100` and counting when GitLab omits the header.
+     */
+    public function authorMergeRequestCount(int $authorId): int
+    {
+        $path = 'groups/' . rawurlencode($this->config->gitlabGroup) . '/merge_requests';
+        $probe = $this->requestUrl($this->buildUrl($path, [
+            'author_id' => $authorId,
+            'state' => 'all',
+            'per_page' => 1,
+        ]));
+        $total = $this->headerInt($probe['headers'], 'X-Total');
+        if ($total !== null) {
+            return $total;
+        }
+
+        $count = 0;
+        $url = $this->buildUrl($path, ['author_id' => $authorId, 'state' => 'all', 'per_page' => 100]);
+        while ($url !== null) {
+            $response = $this->requestUrl($url);
+            $decoded = json_decode($response['body'], true);
+            if (!is_array($decoded)) {
+                throw new RuntimeException('GitLab returned invalid JSON for ' . $url);
+            }
+            $count += count($decoded);
+            $url = LinkHeader::nextUrl($response['headers']);
+        }
+
+        return $count;
     }
 
     /**
@@ -277,6 +314,27 @@ final class Client implements GitLabClientInterface
         }
 
         return substr($trimmed, 0, 200) . '...';
+    }
+
+    /**
+     * Reads an integer-valued response header (case-insensitive name), or null when
+     * the header is absent or not a positive integer.
+     *
+     * @param list<string> $headers
+     */
+    private function headerInt(array $headers, string $name): null|int
+    {
+        $prefix = strtolower($name) . ':';
+        foreach ($headers as $header) {
+            if (str_starts_with(strtolower($header), $prefix)) {
+                $value = trim(substr($header, strlen($prefix)));
+                if ($value !== '' && ctype_digit($value)) {
+                    return (int) $value;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function throttle(): void
