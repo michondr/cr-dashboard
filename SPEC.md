@@ -66,7 +66,7 @@ Columns, left to right:
 | 1 | Jira | `REC-1234` | Link to `{JIRA_URL}{ticket}`. Empty if no ticket in title. |
 | 2 | MR | `#1240` | Link to the MR in a new tab. |
 | 3 | Title | `Add feature X` | Link to the MR in a new tab. Truncates with ellipsis when long. |
-| 4 | Description | `Lorem ipsum dolor…` | Collapses after 50 pixels of height. Click expands in place. Absorbs spare width on widescreen. |
+| 4 | Description | `Lorem ipsum dolor…` | One line with an ellipsis when long. Click expands in place to the full text. Absorbs spare width on widescreen. |
 | 5 | Author | avatar + `J. Doe` | Avatar then name. |
 | 6 | State | `open 2 commits` / `ready 2 commits` | `open`/`draft` plus commit count, or `ready` (green) when the MR is open, not a draft, has at least `REQUIRED_APPROVALS` approvals, and a green (success) pipeline. The list shows open MRs only — merged/closed MRs are kept in the cache for the metrics but hidden from the list. `draft` shows a draft badge. |
 | 7 | Age | `3d 04:12:33` | `now - created_at` for open, `merged_at - created_at` for merged, `closed_at - created_at` for closed. |
@@ -87,7 +87,7 @@ Widescreen layout (top header row, then sample open MRs):
 +--------+-------+--------------------+-----------------------------+---------+------------+----------+---------+-----------+--------+--------+
 ```
 
-The Jira ticket links to the Jira issue. The title and the MR number link to the MR in a new tab. The description collapses after 50 pixels of height and expands on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; drafts show a "draft" badge. The row never scrolls horizontally; on narrower screens the description column shrinks first.
+The Jira ticket links to the Jira issue. The title and the MR number link to the MR in a new tab. The description shows one line with an ellipsis when long and expands to the full text on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; drafts show a "draft" badge. The row never scrolls horizontally; on narrower screens the description column shrinks first.
 
 ### 2.3 Metric cell
 

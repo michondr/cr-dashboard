@@ -113,15 +113,18 @@ body {
 }
 
 .desc {
-    max-height: 50px;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
     cursor: pointer;
     font-size: 13px;
     color: var(--text-dim);
 }
 
 .desc.expanded {
-    max-height: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .col-author {
