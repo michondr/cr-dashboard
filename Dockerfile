@@ -12,14 +12,15 @@ RUN composer dump-autoload --no-dev --classmap-authoritative
 FROM php:8.5-fpm-alpine
 WORKDIR /app
 
+# sqlite3, pdo_sqlite, curl, openssl and mbstring are already compiled into the
+# official php image (--with-sqlite3=/usr --with-curl --with-openssl ...), so no
+# docker-php-ext-install is needed. Only the runtime packages are installed here.
 RUN apk add --no-cache \
         curl \
-        curl-dev \
         dcron \
         nginx \
         openssl \
-        supervisor \
-    && docker-php-ext-install -j"$(nproc)" sqlite3 pdo_sqlite curl
+        supervisor
 
 COPY --from=build /app /app
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
