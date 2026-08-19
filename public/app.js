@@ -302,8 +302,8 @@ function renderRefreshIntervalControl() {
     if (!group) {
         return;
     }
-    for (const button of group.querySelectorAll('.seg-control-option')) {
-        button.classList.toggle('is-active', Number(button.dataset.value) === state.refreshIntervalSeconds);
+    for (const button of group.querySelectorAll('.seg-option')) {
+        button.classList.toggle('active', Number(button.dataset.value) === state.refreshIntervalSeconds);
     }
 }
 
@@ -1366,7 +1366,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (intervalGroup) {
         renderRefreshIntervalControl();
         intervalGroup.addEventListener('click', (event) => {
-            const button = event.target.closest('.seg-control-option');
+            const button = event.target.closest('.seg-option');
             if (!button) {
                 return;
             }

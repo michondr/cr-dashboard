@@ -117,9 +117,9 @@ test('the header shows a refresh-interval segmented control with a live countdow
     await page.waitForSelector('#mr-list > .mr-row');
 
     // Default is 5m, persisted via localStorage.
-    const options = page.locator('#refresh-interval .seg-control-option');
+    const options = page.locator('#refresh-interval .seg-option');
     expect(await options.count()).toBe(4);
-    await expect(page.locator('#refresh-interval .seg-control-option.is-active')).toHaveText('5m');
+    await expect(page.locator('#refresh-interval .seg-option.active')).toHaveText('5m');
 
     const countdown = page.locator('#refresh-countdown');
     await expect(countdown).toBeVisible();
@@ -133,7 +133,7 @@ test('the header shows a refresh-interval segmented control with a live countdow
 
     // Selecting "1m" updates the active option and persists to localStorage.
     await options.filter({ hasText: '1m' }).click();
-    await expect(page.locator('#refresh-interval .seg-control-option.is-active')).toHaveText('1m');
+    await expect(page.locator('#refresh-interval .seg-option.active')).toHaveText('1m');
     const stored = await page.evaluate(() => window.localStorage.getItem('cr-dashboard-refresh-interval'));
     expect(stored).toBe('60');
 
@@ -385,7 +385,9 @@ test('the mean/median segmented control highlights the active mode and applies t
     await expect(segAfter.locator('.seg-option', { hasText: 'median' })).toHaveClass(/active/);
     await expect(segAfter.locator('.seg-option', { hasText: 'mean' })).not.toHaveClass(/active/);
 
-    const otherMeanMedianControls = page.locator('.seg-control');
+    // Scoped to cell headers: the topbar's refresh-interval control is also a
+    // .seg-control but has no mean/median options.
+    const otherMeanMedianControls = page.locator('.cell-header .seg-control');
     const count = await otherMeanMedianControls.count();
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
