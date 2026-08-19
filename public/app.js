@@ -122,6 +122,23 @@ let state = { bucket: 'day', userId: readUserIdFromUrl() };
 let usersById = new Map();
 let charts = [];
 let chartData = null;
+let colorByUserId = new Map();
+
+// A single global color mapping, assigned once per data load from the same
+// ordering as the user dropdown (mr_count DESC, name ASC). Keeping the
+// mapping keyed by user id (not by per-chart series index) means the same
+// person gets the same color in every chart and in the hover tooltip, even
+// when they are absent from some charts.
+function buildColorMap(users) {
+    colorByUserId = new Map();
+    (users || []).forEach((user, index) => {
+        colorByUserId.set(String(user.id), COLORS[index % COLORS.length]);
+    });
+}
+
+function colorForUser(id) {
+    return colorByUserId.get(String(id)) || COLORS[0];
+}
 
 function readUserIdFromUrl() {
     const raw = new URLSearchParams(window.location.search).get('user');
@@ -696,9 +713,9 @@ function updateChartTooltip(u, wrap, tip, persons, unit) {
     // then name ASC), while keeping each row's border colour tied to its line via
     // the original series index.
     const ordered = persons
-        .map(([id, series], lineIndex) => {
+        .map(([id, series]) => {
             const user = usersById.get(id) || { name: id, mr_count: 0 };
-            return { id, series, lineIndex, user };
+            return { id, series, user };
         })
         .sort(
             (a, b) =>
@@ -706,11 +723,11 @@ function updateChartTooltip(u, wrap, tip, persons, unit) {
                 String(a.user.name).localeCompare(String(b.user.name)),
         );
 
-    ordered.forEach(({ id, series, lineIndex, user }) => {
+    ordered.forEach(({ id, series, user }) => {
         const values = pickSeries(series, getMode());
 
         const row = el('div', 'tip-row');
-        row.style.borderLeftColor = COLORS[lineIndex % COLORS.length];
+        row.style.borderLeftColor = colorForUser(id);
         row.appendChild(avatarImage(user, 'tip-avatar'));
         const name = el('span', 'tip-name');
         name.textContent = user.name || id;
@@ -775,10 +792,10 @@ function createChart(wrap, key, meta, data) {
         ],
         series: [
             { label: 'date', stroke: '#8a94ab' },
-            ...persons.map(([id], index) => ({
+            ...persons.map(([id]) => ({
                 label: (usersById.get(id) || {}).name || id,
                 scale: 'y',
-                stroke: COLORS[index % COLORS.length],
+                stroke: colorForUser(id),
                 width: 2,
                 spanGaps: false,
                 points: { show: false },
@@ -893,6 +910,7 @@ async function loadData(bucket) {
         const data = await response.json();
         state.jiraUrl = data.meta.jira_url || '';
         usersById = new Map((data.users || []).map((user) => [String(user.id), user]));
+        buildColorMap(data.users);
         chartData = data;
         renderAll(data);
     } catch (error) {

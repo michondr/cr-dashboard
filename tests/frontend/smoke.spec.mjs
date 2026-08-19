@@ -263,6 +263,32 @@ test('hovering a chart shows a toolbar with each avatar and its value at that ti
     expect(await tip.evaluate((el) => el.hidden)).toBe(true);
 });
 
+test('a user keeps the same color across every chart they appear in', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell');
+    await page.waitForTimeout(500);
+
+    // John Roe (user id 2) appears in the "Coverage %" chart alongside two
+    // other people, and in the "First response time" chart alongside only
+    // one other person; the two charts assign that other person a different
+    // object-key order. A stable global color mapping (keyed by user id, not
+    // by per-chart series index) must still give John Roe the same color in
+    // both.
+    async function borderColorFor(cellTitle, personName) {
+        const cell = page.locator('.cell', { hasText: cellTitle }).first();
+        const box = await cell.locator('.chart-wrap').boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.waitForTimeout(200);
+        const row = cell.locator('.tip-row', { hasText: personName });
+        await expect(row).toBeVisible();
+        return row.evaluate((el) => getComputedStyle(el).borderLeftColor);
+    }
+
+    const coverageColor = await borderColorFor('Coverage %', 'John Roe');
+    const firstResponseColor = await borderColorFor('First response time', 'John Roe');
+    expect(coverageColor).toBe(firstResponseColor);
+});
+
 test('on a phone the MR table scrolls as one unit and row borders span every column', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
