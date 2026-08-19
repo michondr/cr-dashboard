@@ -58,11 +58,11 @@ final class SyncCommand extends Command
 
         try {
             if ($input->getOption('full')) {
-                $this->synchronizer->full($now);
+                $this->synchronizer->full($now, $io);
             } elseif ($input->getOption('refresh-open')) {
-                $this->synchronizer->refreshOpen($now);
+                $this->synchronizer->refreshOpen($now, $io);
             } else {
-                $this->synchronizer->incremental($now);
+                $this->synchronizer->incremental($now, $io);
             }
         } catch (SyncLockedException $e) {
             $io->comment('Another sync is already running; skipping.');

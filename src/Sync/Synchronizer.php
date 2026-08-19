@@ -8,6 +8,7 @@ use App\Config\AppConfig;
 use App\GitLab\GitLabClientInterface;
 use App\GitLab\GitLabException;
 use App\Storage\Database;
+use Symfony\Component\Console\Output\OutputInterface;
 
 use function array_key_exists;
 use function count;
@@ -18,6 +19,9 @@ use function is_bool;
 use function is_float;
 use function is_int;
 use function is_string;
+use function mb_strlen;
+use function mb_substr;
+use function sprintf;
 use function strtotime;
 use function usort;
 
@@ -28,6 +32,9 @@ use function usort;
  */
 final class Synchronizer
 {
+    /** Optional console output for progress reporting during a CLI sync. */
+    private null|OutputInterface $output = null;
+
     public function __construct(
         private readonly GitLabClientInterface $client,
         private readonly Database $database,
@@ -46,24 +53,39 @@ final class Synchronizer
      * Full backfill: every project, every MR (all states, all pages), and every
      * sub-resource of every MR.
      */
-    public function full(int $now): void
+    public function full(int $now, null|OutputInterface $output = null): void
     {
+        $this->output = $output;
+
         if (!$this->acquireLock($now)) {
             throw new SyncLockedException();
         }
 
         try {
+            $this->report('Full backfill: fetching projects...');
             $projectsById = $this->fetchProjects();
-            $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'all']);
+            $this->report(sprintf('  %d project(s).', count($projectsById)));
 
+            $this->report('Fetching all merge requests (all states, all pages)...');
+            $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'all']);
+            $total = count($mrs);
+            $this->report(sprintf('  %d MR(s) fetched; syncing sub-resources...', $total));
+
+            $done = 0;
             foreach ($mrs as $mr) {
                 if (!$this->isAllowedMr($mr, $projectsById)) {
                     continue;
                 }
                 $this->syncMergeRequest($mr);
+                $done++;
+                $this->reportMrProgress($done, $total, $mr, $projectsById);
             }
 
-            $this->applyRetention($now);
+            $this->report(sprintf('  synced %d of %d MR(s).', $done, $total));
+
+            $pruned = $this->applyRetention($now);
+            $days = $this->config->retentionDays;
+            $this->report(sprintf('Retention pruned %d MR(s) older than %d days.', $pruned, $days));
             $this->setSyncState('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
@@ -75,40 +97,57 @@ final class Synchronizer
      * nothing was ever synced), plus a re-poll of pipelines/jobs for MRs whose
      * latest pipeline is still running or pending.
      */
-    public function incremental(int $now): void
+    public function incremental(int $now, null|OutputInterface $output = null): void
     {
+        $this->output = $output;
+
         if (!$this->acquireLock($now)) {
             throw new SyncLockedException();
         }
 
         try {
+            $this->report('Incremental sync: fetching projects...');
             $projectsById = $this->fetchProjects();
+            $this->report(sprintf('  %d project(s).', count($projectsById)));
+
             $lastSync = $this->lastSync();
             $updatedAfter = $lastSync === null ? $now - 3600 : $lastSync - 60;
+            $this->report(sprintf('Fetching MRs updated since %s...', gmdate(DATE_ATOM, $updatedAfter)));
             $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, [
                 'state' => 'all',
                 'updated_after' => gmdate(DATE_ATOM, $updatedAfter),
             ]);
+            $total = count($mrs);
+            $this->report(sprintf('  %d MR(s) fetched; syncing...', $total));
 
+            $done = 0;
             $syncedIds = [];
             foreach ($mrs as $mr) {
                 if (!$this->isAllowedMr($mr, $projectsById)) {
                     continue;
                 }
                 $this->syncMergeRequest($mr);
+                $done++;
                 $syncedIds[] = $this->intValue($mr, 'id');
+                $this->reportMrProgress($done, $total, $mr, $projectsById);
             }
 
-            foreach ($this->runningPipelineMrIds() as $mrId) {
+            $runningIds = $this->runningPipelineMrIds();
+            $runningCount = count($runningIds);
+            $this->report(sprintf('  synced %d/%d; re-polling %d running pipeline(s)', $done, $total, $runningCount));
+            $polled = 0;
+            foreach ($runningIds as $mrId) {
                 if (in_array($mrId, $syncedIds, true)) {
                     continue;
                 }
                 $row = $this->mergeRequestRow($mrId);
                 if ($row !== null) {
                     $this->syncPipelinesOnly($row);
+                    $polled++;
                 }
             }
 
+            $this->report(sprintf('  re-polled %d MR(s).', $polled));
             $this->setSyncState('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
@@ -120,24 +159,38 @@ final class Synchronizer
      * catches approvals and discussions that did not bump `updated_at`), then
      * prune MRs that fall outside retention.
      */
-    public function refreshOpen(int $now): void
+    public function refreshOpen(int $now, null|OutputInterface $output = null): void
     {
+        $this->output = $output;
+
         if (!$this->acquireLock($now)) {
             throw new SyncLockedException();
         }
 
         try {
+            $this->report('Open-MR refresh: fetching projects...');
             $projectsById = $this->fetchProjects();
-            $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'opened']);
+            $this->report(sprintf('  %d project(s).', count($projectsById)));
 
+            $this->report('Fetching open merge requests...');
+            $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'opened']);
+            $total = count($mrs);
+            $this->report(sprintf('  %d open MR(s); syncing sub-resources...', $total));
+
+            $done = 0;
             foreach ($mrs as $mr) {
                 if (!$this->isAllowedMr($mr, $projectsById)) {
                     continue;
                 }
                 $this->syncMergeRequest($mr);
+                $done++;
+                $this->reportMrProgress($done, $total, $mr, $projectsById);
             }
 
-            $this->applyRetention($now);
+            $this->report(sprintf('  synced %d of %d MR(s).', $done, $total));
+
+            $pruned = $this->applyRetention($now);
+            $this->report(sprintf('Retention pruned %d MR(s).', $pruned));
             $this->setSyncState('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
@@ -596,6 +649,47 @@ final class Synchronizer
     private function releaseLock(): void
     {
         $this->database->execute("DELETE FROM sync_state WHERE key = 'sync_lock'");
+    }
+
+    private function report(string $message): void
+    {
+        $this->output?->writeln($message);
+    }
+
+    /**
+     * Per-MR progress: at -v every MR is logged with its title; otherwise a
+     * running count every 25 MRs so a long backfill still shows life.
+     *
+     * @param array<array-key, mixed> $mr
+     * @param array<int, string> $projectsById
+     */
+    private function reportMrProgress(int $done, int $total, array $mr, array $projectsById): void
+    {
+        if ($this->output === null) {
+            return;
+        }
+
+        if ($this->output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+            $this->output->writeln(sprintf('  %d/%d %s', $done, $total, $this->mrLabel($mr, $projectsById)));
+        } elseif ($done % 25 === 0) {
+            $this->output->writeln(sprintf('  ...%d/%d', $done, $total));
+        }
+    }
+
+    /**
+     * @param array<array-key, mixed> $mr
+     * @param array<int, string> $projectsById
+     */
+    private function mrLabel(array $mr, array $projectsById): string
+    {
+        $projectId = $this->intValue($mr, 'project_id');
+        $path = $projectsById[$projectId] ?? ('project ' . $projectId);
+        $title = $this->stringValue($mr, 'title');
+        if (mb_strlen($title) > 60) {
+            $title = mb_substr($title, 0, 57) . '...';
+        }
+
+        return sprintf('%s !%d %s', $path, $this->intValue($mr, 'iid'), $title);
     }
 
     private function setSyncState(string $key, string $value): void
