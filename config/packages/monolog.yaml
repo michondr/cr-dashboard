@@ -1,0 +1,10 @@
+# Logs to a rotating file under var/log. Dev/test record everything; prod
+# (see config/packages/prod/monolog.yaml) is overridden to error level only so
+# uncaught exceptions are captured instead of rendered as a silent 500 page.
+monolog:
+    handlers:
+        main:
+            type: stream
+            path: "%kernel.logs_dir%/%kernel.environment%.log"
+            level: debug
+            max_files: 14
