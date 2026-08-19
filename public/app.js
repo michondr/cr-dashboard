@@ -229,6 +229,28 @@ function yAxisValues(unit) {
     });
 }
 
+// uPlot's built-in time formatter assumes epoch seconds; our x data is epoch
+// milliseconds, so the built-in renders dates ~58,000 years in the future
+// (e.g. "58486" as a year-only tick). The tick positions themselves land on
+// day/hour boundaries in ms, so the labels are formatted here from those ms
+// values instead. Day/week ticks show the date; hour ticks add the hour.
+function formatXAxisValues(_u, splits, _axisIdx, _foundSpace, foundIncr) {
+    const step = foundIncr || (splits.length > 1 ? splits[1] - splits[0] : 0);
+    const showTime = step > 0 && step < 86_400_000;
+    return splits.map((value) => {
+        const d = new Date(value);
+        const y = d.getUTCFullYear();
+        const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        let label = `${y}-${mo}-${day}`;
+        if (showTime) {
+            label += ` ${String(d.getUTCHours()).padStart(2, '0')}:00`;
+        }
+
+        return label;
+    });
+}
+
 function renderAvatar(node, name, avatarUrl) {
     if (avatarUrl) {
         const img = el('img', 'avatar');
@@ -694,9 +716,11 @@ function createChart(wrap, key, meta, data) {
         legend: { show: false },
         cursor: { drag: 'x', points: { show: false } },
         select: { show: true },
+        // x is a time scale over UTC epoch milliseconds; the axis labels are
+        // formatted by formatXAxisValues (the built-in formatter assumes seconds).
         scales: { x: { time: true } },
         axes: [
-            { stroke: '#8a94ab', grid: { stroke: '#2a3347' }, size: 48 },
+            { stroke: '#8a94ab', grid: { stroke: '#2a3347' }, size: 48, values: formatXAxisValues },
             { stroke: '#8a94ab', grid: { stroke: '#2a3347' }, size: 34, values: yAxisValues(meta.unit) },
         ],
         series: [

@@ -130,6 +130,41 @@ test('my view filter splits the list into authored and awaiting review', async (
     expect(await page.locator('.mr-section').nth(1).locator('.status-stale').count()).toBe(0);
 });
 
+test('chart x-axis labels show dates, not bogus year numbers', async ({ page }) => {
+    // Capture the text uPlot paints onto the chart canvases.
+    await page.addInitScript(() => {
+        window.__axisTexts = [];
+        const orig = CanvasRenderingContext2D.prototype.fillText;
+        CanvasRenderingContext2D.prototype.fillText = function (text, x, y, ...rest) {
+            if (text != null && String(text).length <= 40) {
+                const canvas = this.canvas;
+                const r = canvas.getBoundingClientRect();
+                window.__axisTexts.push({ text: String(text), pageX: r.left + x, pageY: r.top + y });
+            }
+            return orig.call(this, text, x, y, ...rest);
+        };
+    });
+
+    await page.goto('/');
+    await page.waitForSelector('.cell');
+    await page.waitForTimeout(500);
+
+    // The bottom strip of a metric cell is the x-axis. It must show dates
+    // ("2026-07-08") and never the bogus ~58,000-year tick numbers uPlot's
+    // built-in time formatter produced for millisecond data.
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const box = await coverage.locator('.chart-wrap').boundingBox();
+    const labels = await page.evaluate((bottom) => (
+        window.__axisTexts
+            .filter((d) => d.pageY > bottom - 42 && d.pageY < bottom)
+            .map((d) => d.text)
+    ), box.y + box.height);
+
+    expect(labels.length).toBeGreaterThanOrEqual(2);
+    expect(labels.some((t) => /^\d{4}-\d{2}-\d{2}$/.test(t))).toBe(true);
+    expect(labels.every((t) => !/^\d{5}$/.test(t))).toBe(true);
+});
+
 test('chart cells mark each line with an avatar on its last point', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.cell');
