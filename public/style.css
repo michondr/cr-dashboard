@@ -185,12 +185,43 @@ body {
 }
 
 .mr-row {
+    position: relative;
     border-bottom: 1px solid var(--border);
     min-height: 34px;
 }
 
 .mr-row.dim {
     color: var(--text-dim);
+}
+
+/* ---------- SSE refresh progress (item 6) ---------- */
+
+/* queued: a faint accent left border shows queue-order visibility. */
+.mr-row.refresh-queued {
+    box-shadow: inset 3px 0 0 0 var(--accent);
+}
+
+/* fetching: a lighter background fills left->right, driven by --refresh-progress
+   (0 to 1, set from requests_done/requests_expected) via a pseudo-element so it
+   never fights the row's own background/grid layout. */
+.mr-row.refresh-fetching {
+    --refresh-progress: 0;
+}
+
+.mr-row.refresh-fetching::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: calc(var(--refresh-progress, 0) * 100%);
+    background: rgba(91, 155, 213, 0.14);
+    pointer-events: none;
+    transition: width 0.3s linear;
+    z-index: 0;
+}
+
+.mr-row.refresh-fetching > * {
+    position: relative;
+    z-index: 1;
 }
 
 .mr-row .col-jira a,

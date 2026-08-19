@@ -41,6 +41,48 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (url.pathname === '/.well-known/mercure') {
+        // A minimal SSE stub standing in for the Mercure hub: keeps the
+        // connection open and, if a test primed `global.__ssePending`
+        // (see /__test/sse below), replays those events once subscribed.
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+        });
+        res.write(':ok\n\n');
+        for (const payload of global.__ssePending || []) {
+            res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        }
+        global.__ssePending = [];
+        global.__sseRes = res;
+        req.on('close', () => res.end());
+
+        return;
+    }
+
+    // Test-only helper: POST a JSON payload here and it is immediately
+    // forwarded as a Mercure SSE event to any connected EventSource (or
+    // queued for the next one to connect).
+    if (url.pathname === '/__test/sse' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk;
+        });
+        req.on('end', () => {
+            const payload = JSON.parse(body);
+            if (global.__sseRes) {
+                global.__sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+            } else {
+                global.__ssePending = [...(global.__ssePending || []), payload];
+            }
+            res.writeHead(204);
+            res.end();
+        });
+
+        return;
+    }
+
     const relative = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
     const filePath = path.resolve(publicDir, relative);
     if (!filePath.startsWith(publicDir)) {

@@ -7,6 +7,9 @@ const REFRESH_INTERVAL_STORAGE_KEY = 'cr-dashboard-refresh-interval';
 const REFRESH_INTERVAL_OPTIONS = [0, 60, 300, 900];
 const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
 
+const MERCURE_URL = '/.well-known/mercure';
+const SSE_ERROR_THRESHOLD = 3;
+
 const COLORS = [
     '#5b9bd5',
     '#3fb950',
@@ -131,8 +134,118 @@ let state = {
     refreshCycleActive: false,
     refreshCycleTotal: 0,
     refreshCycleDone: 0,
+    sseConnected: false,
 };
 let usersById = new Map();
+let sseErrorStreak = 0;
+
+// Native EventSource subscription to the Mercure hub (item 6): replaces the
+// 60s /api/data poll with targeted refetches driven by `data`-topic events
+// while connected, and per-row queued/fetching/done visuals driven by
+// `refresh`-topic events. Falls back to the 60s poll if the connection keeps
+// erroring (EventSource auto-reconnects; we just stop trusting it as "live").
+function connectRefreshStream() {
+    if (typeof window.EventSource !== 'function') {
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.append('topic', 'refresh');
+    params.append('topic', 'data');
+    const source = new EventSource(`${MERCURE_URL}?${params.toString()}`);
+
+    source.onopen = () => {
+        state.sseConnected = true;
+        sseErrorStreak = 0;
+    };
+
+    source.onerror = () => {
+        sseErrorStreak += 1;
+        if (sseErrorStreak >= SSE_ERROR_THRESHOLD) {
+            state.sseConnected = false;
+        }
+    };
+
+    source.onmessage = (event) => {
+        let payload;
+        try {
+            payload = JSON.parse(event.data);
+        } catch {
+            return;
+        }
+        handleRefreshEvent(payload);
+    };
+}
+
+function refreshProgressRow(mrId) {
+    return document.querySelector(`.mr-row[data-mr-id="${CSS.escape(String(mrId))}"]`);
+}
+
+function handleRefreshEvent(payload) {
+    if (payload.type === 'progress') {
+        const row = refreshProgressRow(payload.mr_id);
+        if (row) {
+            row.classList.remove('refresh-queued');
+            row.classList.add('refresh-fetching');
+            const expected = payload.requests_expected || 0;
+            const ratio = expected > 0 ? payload.requests_done / expected : 0;
+            row.style.setProperty('--refresh-progress', String(Math.min(1, Math.max(0, ratio))));
+        }
+
+        return;
+    }
+
+    if (payload.type === 'done') {
+        const row = refreshProgressRow(payload.mr_id);
+        if (row) {
+            row.classList.remove('refresh-fetching', 'refresh-queued');
+            row.style.removeProperty('--refresh-progress');
+        }
+
+        return;
+    }
+
+    if (payload.type === 'changed') {
+        refetchAndPatchRow(payload.mr_id);
+    }
+}
+
+// Refetches the dataset and swaps just the one changed row in place (no full
+// list rebuild, no scroll-position loss). A row that disappeared (merged,
+// closed) is removed; a brand-new row not yet in the DOM is picked up on the
+// next full reload rather than spliced in mid-list.
+async function refetchAndPatchRow(mrId) {
+    try {
+        const params = new URLSearchParams({ bucket: state.bucket });
+        if (state.userId) {
+            params.set('user', state.userId);
+        }
+        const response = await fetch(`/api/data?${params.toString()}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        chartData = data;
+        renderStats(data);
+
+        const mr = (data.mrs || []).find((candidate) => String(candidate.id) === String(mrId));
+        const existingRow = refreshProgressRow(mrId);
+        if (!mr) {
+            if (existingRow) {
+                existingRow.remove();
+            }
+
+            return;
+        }
+
+        const freshRow = renderMrRow(mr, mr.stale === true);
+        if (existingRow) {
+            existingRow.replaceWith(freshRow);
+        }
+    } catch {
+        // Offline or the API is unreachable; the row keeps its last-known state.
+    }
+}
 
 function readRefreshInterval() {
     let raw = null;
@@ -513,6 +626,7 @@ function titleWithoutTicket(mr) {
 
 function renderMrRow(mr, dimmed) {
     const row = el('div', 'mr-row');
+    row.dataset.mrId = String(mr.id);
     if (dimmed) {
         row.classList.add('dim');
     }
@@ -1259,7 +1373,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1000);
 
     loadData('day');
-    setInterval(() => loadData(state.bucket), REFRESH_MS);
+    connectRefreshStream();
+    // While SSE is connected, `data`-topic events drive targeted refetches
+    // instead of this poll; it only resumes as a fallback once the stream
+    // has errored persistently (see connectRefreshStream()).
+    setInterval(() => {
+        if (!state.sseConnected) {
+            loadData(state.bucket);
+        }
+    }, REFRESH_MS);
 
     // Tapping outside an open touch-driven tooltip (chart cursor, tip-icon,
     // or description) dismisses it.

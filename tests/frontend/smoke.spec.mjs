@@ -150,6 +150,31 @@ test('the header shows a refresh-interval segmented control with a live countdow
     expect(request.method()).toBe('POST');
 });
 
+test('SSE refresh events fill a row\'s progress and clear it again on completion', async ({ page, request }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    const row = page.locator('.mr-row[data-mr-id="201"]');
+    await expect(row).toHaveCount(1);
+
+    // Give the EventSource a moment to connect before priming events.
+    await page.waitForTimeout(300);
+
+    await request.post('/__test/sse', {
+        data: { type: 'progress', mr_id: 201, requests_done: 2, requests_expected: 4 },
+    });
+    await expect(row).toHaveClass(/refresh-fetching/);
+    await expect
+        .poll(() => row.evaluate((el) => el.style.getPropertyValue('--refresh-progress')))
+        .toBe('0.5');
+
+    await request.post('/__test/sse', { data: { type: 'done', mr_id: 201 } });
+    await expect(row).not.toHaveClass(/refresh-fetching/);
+    await expect
+        .poll(() => row.evaluate((el) => el.style.getPropertyValue('--refresh-progress')))
+        .toBe('');
+});
+
 test('description stays collapsed and hovers to a markdown-rendered tooltip', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');
