@@ -40,7 +40,7 @@ final class SynchronizerTest extends TestCase
         $this->client->projects = [
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
         ];
-        $this->client->mergeRequests['all'] = [
+        $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
         ];
         $this->client->approvalsByIid[101] = [
@@ -115,7 +115,7 @@ final class SynchronizerTest extends TestCase
         $this->client->projects = [
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
         ];
-        $this->client->mergeRequests['all'] = [
+        $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
         ];
         $this->client->commitStatsBySha['shaA'] = ['stats' => ['additions' => 10, 'deletions' => 1]];
@@ -156,7 +156,7 @@ final class SynchronizerTest extends TestCase
         $this->client->projects = [
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
         ];
-        $this->client->mergeRequests['all'] = [
+        $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
         ];
         $this->client->commitStatsBySha['shaA'] = ['stats' => ['additions' => 7, 'deletions' => 3]];
@@ -207,16 +207,16 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $allQuery = null;
+        $mergedQuery = null;
         foreach ($this->client->mergeRequestQueries as $query) {
-            if (($query['state'] ?? null) === 'all') {
-                $allQuery = $query;
+            if (($query['state'] ?? null) === 'merged') {
+                $mergedQuery = $query;
                 break;
             }
         }
-        self::assertNotNull($allQuery, 'full() issues a state=all query bounded by updated_after');
-        self::assertArrayHasKey('updated_after', $allQuery);
-        $updatedAfter = $allQuery['updated_after'];
+        self::assertNotNull($mergedQuery, 'full() issues a state=merged query bounded by updated_after');
+        self::assertArrayHasKey('updated_after', $mergedQuery);
+        $updatedAfter = $mergedQuery['updated_after'];
         self::assertIsString($updatedAfter);
         // retentionDays defaults to 90: 2026-08-10 minus 90 days = 2026-05-12.
         self::assertStringStartsWith('2026-05-12T', $updatedAfter);
@@ -227,7 +227,7 @@ final class SynchronizerTest extends TestCase
         $this->client->projects = [
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
         ];
-        $this->client->mergeRequests['all'] = [
+        $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
         ];
         $this->client->pipelinesByIid[101] = [
@@ -265,13 +265,50 @@ final class SynchronizerTest extends TestCase
         $this->client->mergeRequests['all'] = [];
         $this->synchronizer->incremental((int) strtotime('2026-08-10T12:15:00+00:00'));
 
-        // full() issues two MR queries (opened, then all+updated_after); the
+        // full() issues two MR queries (opened, then merged+updated_after); the
         // incremental query is therefore the third recorded query.
         $lastQuery = $this->client->mergeRequestQueries[2];
         self::assertArrayHasKey('updated_after', $lastQuery);
         $updatedAfter = $lastQuery['updated_after'];
         self::assertIsString($updatedAfter);
         self::assertStringStartsWith('2026-08-10T', $updatedAfter);
+    }
+
+    public function testIncrementalDropsMrThatTransitionsToClosed(): void
+    {
+        $this->client->projects = [
+            ['id' => 1, 'path_with_namespace' => 'group/proj'],
+        ];
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
+        ];
+        $this->client->approvalsByIid[101] = ['approved_by' => [
+            [
+                'user' => ['id' => 2, 'name' => 'Bob', 'username' => 'bob', 'avatar_url' => null],
+                'approved_at' => '2026-08-02T09:00:00+00:00',
+            ],
+        ]];
+        $this->client->commitsByIid[101] = [
+            ['id' => 'shaA', 'title' => 'a', 'committed_date' => '2026-08-01T10:30:00+00:00'],
+        ];
+        $this->client->commitStatsBySha['shaA'] = ['stats' => ['additions' => 1, 'deletions' => 1]];
+
+        $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
+        self::assertSame(1, $this->rowCount('merge_requests'));
+        self::assertSame(1, $this->rowCount('approvals'));
+        self::assertSame(1, $this->rowCount('commits'));
+
+        // The MR is closed before the next sync: incremental fetches it via
+        // state=all and must drop it and its sub-resources from the cache.
+        $this->client->mergeRequests['all'] = [
+            $this->mr(101, 'closed', '2026-08-01T09:00:00+00:00'),
+        ];
+        $this->client->mergeRequests['opened'] = [];
+        $this->synchronizer->incremental((int) strtotime('2026-08-10T12:15:00+00:00'));
+
+        self::assertSame(0, $this->rowCount('merge_requests'));
+        self::assertSame(0, $this->rowCount('approvals'));
+        self::assertSame(0, $this->rowCount('commits'));
     }
 
     public function testSyncLockBlocksConcurrentSync(): void
@@ -297,7 +334,7 @@ final class SynchronizerTest extends TestCase
         $this->client->projects = [
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
         ];
-        $this->client->mergeRequests['all'] = [
+        $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
         ];
 
@@ -319,7 +356,7 @@ final class SynchronizerTest extends TestCase
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
             ['id' => 2, 'path_with_namespace' => 'group/other'],
         ];
-        $this->client->mergeRequests['all'] = [$allowedMr, $blockedMr];
+        $this->client->mergeRequests['opened'] = [$allowedMr, $blockedMr];
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
@@ -351,7 +388,7 @@ final class SynchronizerTest extends TestCase
         $this->client->projects = [
             ['id' => 1, 'path_with_namespace' => 'group/proj'],
         ];
-        $this->client->mergeRequests['all'] = [
+        $this->client->mergeRequests['opened'] = [
             $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
         ];
         $approvedBy = [];

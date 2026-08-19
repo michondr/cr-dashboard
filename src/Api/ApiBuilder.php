@@ -12,13 +12,10 @@ use App\Metrics\PipelineIndicator;
 use App\Storage\Database;
 use App\Sync\Synchronizer;
 
-use function array_slice;
 use function count;
 use function gmdate;
 use function rtrim;
 use function sprintf;
-use function strcmp;
-use function usort;
 
 use const DATE_ATOM;
 
@@ -96,8 +93,9 @@ final class ApiBuilder
     }
 
     /**
-     * The rows the MR list renders: the last 5 merged MRs, the open and closed
-     * MRs from the last 60 days, and stale open MRs (flagged `stale`).
+     * The rows the MR list renders: open MRs only. Merged and closed MRs are
+     * kept in the cache for the merge/review metrics but are not shown in the
+     * list. Stale open MRs are flagged `stale`.
      *
      * @return list<array<string, mixed>>
      */
@@ -106,35 +104,13 @@ final class ApiBuilder
         $projectPaths = $this->projectPaths();
         $rows = [];
         foreach ($dataset->mrs as $mr) {
+            if ((string) $mr['state'] !== 'opened') {
+                continue;
+            }
             $rows[] = $this->buildMrRow($mr, $projectPaths, $dataset, $now);
         }
 
-        $merged = [];
-        $body = [];
-        foreach ($rows as $row) {
-            if ($row['state'] === 'merged') {
-                $merged[] = $row;
-            } else {
-                $body[] = $row;
-            }
-        }
-
-        usort(
-            $merged,
-            static fn (array $a, array $b): int => strcmp((string) $b['merged_at'], (string) $a['merged_at']),
-        );
-        $merged = array_slice($merged, 0, 5);
-
-        $windowStart = $this->iso($now - (AppConfig::WINDOW_DAYS * 86400));
-        $filtered = [];
-        foreach ($body as $row) {
-            if ($row['state'] === 'closed' && $row['created_at'] < $windowStart) {
-                continue;
-            }
-            $filtered[] = $row;
-        }
-
-        return [...$merged, ...$filtered];
+        return $rows;
     }
 
     /**

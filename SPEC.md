@@ -68,7 +68,7 @@ Columns, left to right:
 | 3 | Title | `Add feature X` | Link to the MR in a new tab. Truncates with ellipsis when long. |
 | 4 | Description | `Lorem ipsum dolor…` | Collapses after 50 pixels of height. Click expands in place. Absorbs spare width on widescreen. |
 | 5 | Author | avatar + `J. Doe` | Avatar then name. |
-| 6 | State | `open 2 commits` | `open`/`merged`/`closed`/`draft` plus commit count. `merged` and `closed` rows are grayed; `draft` shows a draft badge. |
+| 6 | State | `open 2 commits` | `open`/`draft` plus commit count. The list shows open MRs only — merged/closed MRs are kept in the cache for the metrics but hidden from the list. `draft` shows a draft badge. |
 | 7 | Age | `3d 04:12:33` | `now - created_at` for open, `merged_at - created_at` for merged, `closed_at - created_at` for closed. |
 | 8 | First approve | `1d 02:11` | Time to first approval. Empty if none. |
 | 9 | Pipeline | `[sp]` / `[ok]` / `[!!]` | Spinner while running (red if a finished job failed, orange if a job warned), green check on success, red on failure, neutral on canceled/skipped/manual. |
@@ -81,12 +81,12 @@ Widescreen layout (top header row, then a sample open MR, a closed MR, and a mer
 | Jira   | MR    | Title              | Description (coll. 50px)    | Author  | State      | Age      | 1st App | Pipe   | Commits|
 +--------+-------+--------------------+-----------------------------+---------+------------+----------+---------+--------+--------+
 | REC-…  | #1240 | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | open 2comm | 3d04:12  | 1d02:11 | [sp]   | [2comm]|
-|        | #1239 | Fix bug Y          | Consectetur adipiscing…     | (av) JR | closed 1c  | 5d02:00  | 0d05:30 | [ok]   | [1comm]|
-|        | #1238 | Refactor Z         | Dolor sit amet consectetur… | (av) AB | merged 4c  | 2d01:00  | 1d00:10 | [!!]   | [4comm]|
+|        | #1239 | Fix bug Y          | Consectetur adipiscing…     | (av) JR | open 1comm | 5d02:00  | 0d05:30 | [ok]   | [1comm]|
+|        | #1238 | Refactor Z         | Dolor sit amet consectetur… | (av) AB | open 4comm | 2d01:00  | 1d00:10 | [!!]   | [4comm]|
 +--------+-------+--------------------+-----------------------------+---------+------------+----------+---------+--------+--------+
 ```
 
-The Jira ticket links to the Jira issue. The title and the MR number link to the MR in a new tab. The description collapses after 50 pixels of height and expands on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). Merged and closed rows render grayed out; closed rows show a "closed" badge, drafts show a "draft" badge. The row never scrolls horizontally; on narrower screens the description column shrinks first.
+The Jira ticket links to the Jira issue. The title and the MR number link to the MR in a new tab. The description collapses after 50 pixels of height and expands on click. The commits link opens one new tab per current commit diff (the user grants popup permission to the dashboard URL once). The list shows open MRs only; drafts show a "draft" badge. The row never scrolls horizontally; on narrower screens the description column shrinks first.
 
 ### 2.3 Metric cell
 
@@ -231,15 +231,16 @@ There are three sync modes.
 Full backfill (`app:sync --full`), run once at deploy:
 
 1. Fetch all projects in the group (filtered to `GITLAB_PROJECTS` when set).
-2. Fetch all MRs in the group, all states, all pages.
+2. Fetch every open MR (any age) and every MR merged within `RETENTION_DAYS` (kept for the merge metrics). Closed MRs are never fetched — no metric uses them and the list shows only open MRs.
 3. For each MR, fetch approvals, discussions, pipelines, jobs, and commits; for each new commit sha, fetch commit stats.
 4. Store everything in SQLite (wipe-and-reinsert approvals/discussions/pipelines/jobs per MR; append commits).
-5. Set `last_sync` to now.
+5. Reconcile: drop any cached MR no longer open or recently merged (e.g. an MR that has since been closed), so the cache mirrors GitLab.
+6. Set `last_sync` to now.
 
 Incremental (`app:sync`, also the background on-load path):
 
 1. If `last_sync` is null, fetch only MRs updated in the last 1 hour (bounded so the first-ever load is fast). Otherwise fetch MRs with `updated_after = last_sync - 60s` (small overlap margin for clock skew).
-2. For each changed MR, re-fetch approvals, discussions, pipelines, jobs, and commits; fetch stats for any new commit sha.
+2. For each changed MR: if it is `closed`, drop it from the cache (closed MRs are not stored); otherwise re-fetch approvals, discussions, pipelines, jobs, and commits, and fetch stats for any new commit sha.
 3. Additionally, re-fetch pipelines and jobs for any MR whose latest cached pipeline is `running` or `pending`, even if the MR itself was not updated, so the pipeline indicator resolves within the sync cadence.
 4. Upsert the MR. Wipe-and-reinsert approvals/discussions/pipelines/jobs for that MR. Append commits; set `current` on shas present, unset on shas that vanished.
 5. Set `last_sync` to now.
@@ -249,7 +250,7 @@ Open-MR refresh (`app:sync --refresh-open`, nightly):
 1. For every currently open MR, re-fetch approvals, discussions, pipelines, jobs, and commits.
 2. Wipe-and-reinsert approvals/discussions/pipelines/jobs; append commits.
 3. This catches approvals and discussions that did not bump the MR's `updated_at`. Merged/closed MRs are frozen and are skipped.
-4. Retention: delete MRs that are merged or closed and whose `merged_at`/`closed_at` is older than `RETENTION_DAYS` (default 90), together with their approvals, discussions, commits, pipelines, and jobs. MRs pruned this way were not open in the last 60 days, so they cannot affect the displayed windows.
+4. Retention: delete merged MRs older than `RETENTION_DAYS` (default 90), together with their approvals, discussions, commits, pipelines, and jobs. (Closed MRs are dropped at fetch and never stored.) MRs pruned this way were not open in the last 60 days, so they cannot affect the displayed windows.
 
 The sync sleeps between requests to stay under `GITLAB_RPS`. A sync lock (stored in `sync_state`) prevents two syncs from running at once; a holder is allowed a generous timeout, after which the lock is considered stale and can be taken over.
 

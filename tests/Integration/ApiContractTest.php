@@ -95,9 +95,10 @@ final class ApiContractTest extends TestCase
         self::assertArrayHasKey('mrs', $payload);
         $mrs = $payload['mrs'];
         self::assertIsArray($mrs);
-        self::assertCount(2, $mrs);
+        // The list shows open MRs only; the merged MR is kept for metrics but
+        // hidden from the list.
+        self::assertCount(1, $mrs);
         $openMr = $this->findMr($mrs, 101);
-        $mergedMr = $this->findMr($mrs, 102);
 
         self::assertSame('REC-1234', $openMr['jira_ticket']);
         self::assertSame('opened', $openMr['state']);
@@ -114,8 +115,6 @@ final class ApiContractTest extends TestCase
         $pipeline = $openMr['pipeline'];
         self::assertIsArray($pipeline);
         self::assertSame('none', $pipeline['indicator']);
-
-        self::assertSame('merged', $mergedMr['state']);
 
         self::assertArrayHasKey('metrics', $payload);
         $metrics = $payload['metrics'];

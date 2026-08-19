@@ -13,12 +13,11 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
 
     await page.goto('/');
 
-    // The MR list renders rows.
+    // The MR list renders rows (open MRs only; merged/closed are hidden).
     await page.waitForSelector('.mr-row');
     expect(await page.locator('.mr-row').count()).toBeGreaterThanOrEqual(6);
 
-    // Merged rows are dimmed, a stale MR exists, and the stale link renders.
-    expect(await page.locator('.mr-row.dim').count()).toBeGreaterThanOrEqual(3);
+    // A stale MR exists and the stale link renders.
     await page.waitForSelector('.stale-link');
     expect(await page.locator('.stale-link').textContent()).toContain('stale Merge Requests');
 

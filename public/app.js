@@ -255,7 +255,7 @@ function renderPipeline(p) {
 
 function renderMrRow(mr, dimmed) {
     const row = el('div', 'mr-row');
-    if (dimmed || mr.state === 'merged' || mr.state === 'closed') {
+    if (dimmed) {
         row.classList.add('dim');
     }
 
@@ -362,23 +362,16 @@ function renderMrList(data) {
     const container = document.getElementById('mr-list');
     container.textContent = '';
 
-    const merged = [];
     const stale = [];
     const body = [];
     for (const mr of data.mrs) {
-        if (mr.state === 'merged') {
-            merged.push(mr);
-        } else if (mr.stale) {
+        if (mr.stale) {
             stale.push(mr);
         } else {
             body.push(mr);
         }
     }
     body.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
-
-    for (const mr of merged) {
-        container.appendChild(renderMrRow(mr, true));
-    }
 
     if (stale.length > 0) {
         const link = renderStaleLink(stale);
@@ -395,7 +388,7 @@ function renderMrList(data) {
     }
 
     for (const mr of body) {
-        container.appendChild(renderMrRow(mr, mr.state === 'closed'));
+        container.appendChild(renderMrRow(mr, false));
     }
 }
 

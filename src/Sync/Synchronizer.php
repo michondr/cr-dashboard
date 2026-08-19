@@ -51,11 +51,11 @@ final class Synchronizer
 
     /**
      * Full backfill: every project, all currently open MRs (any age) plus every
-     * MR updated within the retention window (all states, all pages), and every
-     * sub-resource of every MR. Merged/closed MRs older than the retention
-     * window are never fetched — they would be pruned by applyRetention right
-     * after the fetch, so pulling them (and their sub-resources) is pure waste.
-     * Open MRs are never pruned, so they are always fetched regardless of age.
+     * MR merged within the retention window (kept for the merge metrics), and
+     * every sub-resource of every MR. Closed MRs are never fetched — no metric
+     * uses them, and the list shows only open MRs. After the fetch, any cached
+     * MR not in the fetched set (closed since, or merged out of the retention
+     * window) is dropped, so the cache mirrors GitLab.
      */
     public function full(int $now, null|OutputInterface $output = null): void
     {
@@ -72,18 +72,26 @@ final class Synchronizer
 
             $window = $now - ($this->config->retentionDays * 86400);
             $this->report(sprintf(
-                'Fetching merge requests (open + updated within %d days)...',
+                'Fetching merge requests (open + merged within %d days)...',
                 $this->config->retentionDays,
             ));
             $mrs = $this->mergeAndDedup(
                 $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'opened']),
                 $this->client->groupMergeRequests($this->config->gitlabGroup, [
-                    'state' => 'all',
+                    'state' => 'merged',
                     'updated_after' => gmdate(DATE_ATOM, $window),
                 ]),
             );
             $total = count($mrs);
             $this->report(sprintf('  %d MR(s) fetched; syncing sub-resources...', $total));
+
+            $fetchedIds = [];
+            foreach ($mrs as $mr) {
+                $id = $this->intValue($mr, 'id');
+                if ($id !== 0) {
+                    $fetchedIds[$id] = true;
+                }
+            }
 
             $done = 0;
             foreach ($mrs as $mr) {
@@ -97,9 +105,8 @@ final class Synchronizer
 
             $this->report(sprintf('  synced %d of %d MR(s).', $done, $total));
 
-            $pruned = $this->applyRetention($now);
-            $days = $this->config->retentionDays;
-            $this->report(sprintf('Retention pruned %d MR(s) older than %d days.', $pruned, $days));
+            $dropped = $this->reconcileMrs($fetchedIds);
+            $this->report(sprintf('Reconciled: dropped %d MR(s) no longer open or recently merged.', $dropped));
             $this->setSyncState('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
@@ -140,9 +147,19 @@ final class Synchronizer
                 if (!$this->isAllowedMr($mr, $projectsById)) {
                     continue;
                 }
+                $id = $this->intValue($mr, 'id');
+                if ($id === 0) {
+                    continue;
+                }
+                // Closed MRs are not stored (no metric uses them and the list
+                // shows only open MRs): drop a closed transition from the cache.
+                if ($this->stringValue($mr, 'state') === 'closed') {
+                    $this->deleteMergeRequest($id);
+                    continue;
+                }
                 $this->syncMergeRequest($mr);
                 $done++;
-                $syncedIds[] = $this->intValue($mr, 'id');
+                $syncedIds[] = $id;
                 $this->reportMrProgress($done, $total, $mr, $projectsById);
             }
 
@@ -682,6 +699,28 @@ final class Synchronizer
         $this->database->execute('DELETE FROM pipelines WHERE mr_id = ?', [$id]);
         $this->database->execute('DELETE FROM jobs WHERE mr_id = ?', [$id]);
         $this->database->execute('DELETE FROM merge_requests WHERE id = ?', [$id]);
+    }
+
+    /**
+     * Drop every cached MR whose id is not in the fetched set. After a full
+     * backfill the fetched set is authoritative for which MRs are open or
+     * recently merged, so anything missing has been closed or merged out of the
+     * retention window and should not linger in the cache.
+     *
+     * @param array<int, true> $fetchedIds
+     */
+    private function reconcileMrs(array $fetchedIds): int
+    {
+        $rows = $this->database->query('SELECT id FROM merge_requests');
+        $deleted = 0;
+        foreach ($rows as $row) {
+            if (!array_key_exists((int) $row['id'], $fetchedIds)) {
+                $this->deleteMergeRequest((int) $row['id']);
+                $deleted++;
+            }
+        }
+
+        return $deleted;
     }
 
     private function acquireLock(int $now): bool

@@ -73,10 +73,17 @@ $client->mergeRequests['all'] = [
     $mr(202, 'opened', $now - (75 * DAY), null, 2, 'REC-150 - Migrate the legacy API'),
     $mr(203, 'closed', $now - (30 * DAY), null, 3, 'REC-300 - Try websockets'),
     $mr(204, 'opened', $now - DAY, null, 3, 'REC-310 - Fix login redirect'),
+    $mr(205, 'opened', $now - (3 * DAY), null, 1, 'REC-201 - Polish the onboarding'),
+    $mr(206, 'opened', $now - (5 * DAY), null, 2, 'REC-202 - Cache invalidation fix'),
+    $mr(207, 'opened', $now - (8 * DAY), null, 3, 'REC-203 - Add an audit log'),
 ];
 $client->mergeRequests['opened'] = array_values(array_filter(
     $client->mergeRequests['all'],
     static fn (array $m): bool => $m['state'] === 'opened',
+));
+$client->mergeRequests['merged'] = array_values(array_filter(
+    $client->mergeRequests['all'],
+    static fn (array $m): bool => $m['state'] === 'merged',
 ));
 
 $client->approvalsByIid[301] = ['approved_by' => [
