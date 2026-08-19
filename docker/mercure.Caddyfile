@@ -1,0 +1,19 @@
+{
+	auto_https off
+	admin off
+}
+
+:3000 {
+	mercure {
+		# Anonymous subscribing is allowed (the dashboard has no auth);
+		# publishing requires a JWT signed with MERCURE_JWT_SECRET (the same
+		# secret App\Mercure\HmacTokenProvider signs with PHP-side).
+		publisher_jwt {env.MERCURE_JWT_SECRET} HS256
+		subscriber_jwt {env.MERCURE_JWT_SECRET} HS256
+		anonymous
+		subscriptions
+		cors_origins *
+	}
+
+	respond /healthz 200
+}

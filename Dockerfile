@@ -27,10 +27,21 @@ RUN apk add --no-cache \
         openssl \
         supervisor
 
+# Mercure hub (a single static Caddy-based binary) for server->browser push.
+# Runs as its own supervisord program (docker/supervisord.conf), fronted by
+# nginx at /.well-known/mercure so no extra port is exposed.
+ARG MERCURE_VERSION=v0.15.9
+RUN curl -fsSL "https://github.com/dunglas/mercure/releases/download/${MERCURE_VERSION}/mercure_${MERCURE_VERSION#v}_Linux_x86_64.tar.gz" \
+        -o /tmp/mercure.tar.gz \
+    && tar -xzf /tmp/mercure.tar.gz -C /usr/local/bin mercure \
+    && chmod +x /usr/local/bin/mercure \
+    && rm /tmp/mercure.tar.gz
+
 COPY --from=build /app /app
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/crontab /etc/crontab
+COPY docker/mercure.Caddyfile /etc/mercure/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \

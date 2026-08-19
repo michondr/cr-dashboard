@@ -34,7 +34,14 @@ JIRA_URL=${JIRA_URL:-}
 SLACK_TOKEN=${SLACK_TOKEN:-}
 SLACK_CHANNEL=${SLACK_CHANNEL:-}
 APP_URL=${APP_URL:-}
+MERCURE_URL=${MERCURE_URL:-http://127.0.0.1:3000/.well-known/mercure}
+MERCURE_JWT_SECRET=${MERCURE_JWT_SECRET:-change-me}
 EOF
+
+# Exported (rather than only written to .env) so supervisord's mercure program
+# can read it via %(ENV_MERCURE_JWT_SECRET)s and sign/verify with the same
+# secret as the PHP-side publisher (App\Mercure\HmacTokenProvider).
+export MERCURE_JWT_SECRET=${MERCURE_JWT_SECRET:-change-me}
 
 # Start nginx, php-fpm and cron under supervisor.
 exec /usr/bin/supervisord -c /etc/supervisord.conf
