@@ -311,8 +311,9 @@ final class Synchronizer
         $this->database->execute(
             'INSERT OR REPLACE INTO merge_requests (
                 id, iid, project_id, title, description, author_id, state, draft,
-                created_at, merged_at, closed_at, updated_at, web_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                created_at, merged_at, closed_at, updated_at, web_url,
+                merge_status, has_conflicts
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $this->intValue($mr, 'id'),
                 $this->intValue($mr, 'iid'),
@@ -327,6 +328,8 @@ final class Synchronizer
                 $this->parseTime($mr['closed_at'] ?? null),
                 $updated,
                 $this->nullableStringValue($mr, 'web_url'),
+                $this->stringValue($mr, 'merge_status'),
+                $this->boolValue($mr, 'has_conflicts') ? 1 : 0,
             ],
         );
     }
@@ -368,7 +371,8 @@ final class Synchronizer
     /**
      * One row per discussion thread: the author of the first non-system,
      * non-author note and that note's time. Reviewers who only reply to an
-     * existing thread are not counted (known simplification).
+     * existing thread are not counted (known simplification). `resolved` is 0
+     * when any resolvable note in the thread is still unresolved.
      *
      * @param list<array<string, mixed>> $discussions
      */
@@ -383,6 +387,17 @@ final class Synchronizer
             $notes = $discussion['notes'] ?? null;
             if (!is_array($notes)) {
                 continue;
+            }
+
+            $resolved = 1;
+            foreach ($notes as $note) {
+                if (!is_array($note)) {
+                    continue;
+                }
+                if (($note['resolvable'] ?? false) === true && ($note['resolved'] ?? false) === false) {
+                    $resolved = 0;
+                    break;
+                }
             }
 
             foreach ($notes as $note) {
@@ -407,8 +422,8 @@ final class Synchronizer
 
                 $this->storeUser($author);
                 $this->database->execute(
-                    'INSERT INTO discussions (mr_id, user_id, created_at) VALUES (?, ?, ?)',
-                    [$mrId, $userId, $createdAt],
+                    'INSERT INTO discussions (mr_id, user_id, created_at, resolved) VALUES (?, ?, ?, ?)',
+                    [$mrId, $userId, $createdAt, $resolved],
                 );
                 break;
             }

@@ -12,6 +12,7 @@ use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\TestAppConfig;
 use PHPUnit\Framework\TestCase;
 
+use function array_merge;
 use function is_file;
 use function strtotime;
 use function sys_get_temp_dir;
@@ -365,6 +366,67 @@ final class SynchronizerTest extends TestCase
         self::assertSame(101, $stored[0]['iid']);
     }
 
+    public function testMrMergeStatusAndConflictsAreStored(): void
+    {
+        $this->client->projects = [
+            ['id' => 1, 'path_with_namespace' => 'group/proj'],
+        ];
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00', null, 1, [
+                'merge_status' => 'cannot_be_merged',
+                'has_conflicts' => true,
+            ]),
+        ];
+
+        $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
+
+        $mr = $this->database->query('SELECT merge_status, has_conflicts FROM merge_requests WHERE id = 101')[0];
+        self::assertSame('cannot_be_merged', $mr['merge_status']);
+        self::assertSame(1, $mr['has_conflicts']);
+    }
+
+    public function testDiscussionResolutionStateIsStored(): void
+    {
+        $this->client->projects = [
+            ['id' => 1, 'path_with_namespace' => 'group/proj'],
+        ];
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
+        ];
+        $this->client->discussionsByIid[101] = [
+            [
+                'notes' => [
+                    [
+                        'system' => false,
+                        'author' => ['id' => 2, 'name' => 'Bob', 'username' => 'bob', 'avatar_url' => null],
+                        'created_at' => '2026-08-02T10:00:00+00:00',
+                        'resolvable' => true,
+                        'resolved' => false,
+                    ],
+                ],
+            ],
+            [
+                'notes' => [
+                    [
+                        'system' => false,
+                        'author' => ['id' => 3, 'name' => 'Ann', 'username' => 'ann', 'avatar_url' => null],
+                        'created_at' => '2026-08-02T11:00:00+00:00',
+                        'resolvable' => true,
+                        'resolved' => true,
+                    ],
+                ],
+            ],
+        ];
+
+        $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
+
+        $resolved = $this->database->query('SELECT user_id, resolved FROM discussions ORDER BY user_id');
+        self::assertSame(2, $resolved[0]['user_id']);
+        self::assertSame(0, $resolved[0]['resolved']);
+        self::assertSame(3, $resolved[1]['user_id']);
+        self::assertSame(1, $resolved[1]['resolved']);
+    }
+
     protected function tearDown(): void
     {
         foreach (
@@ -402,6 +464,8 @@ final class SynchronizerTest extends TestCase
     }
 
     /**
+     * @param array<string, mixed> $overrides
+     *
      * @return array<string, mixed>
      */
     private function mr(
@@ -410,8 +474,9 @@ final class SynchronizerTest extends TestCase
         string $createdIso,
         null|string $mergedIso = null,
         int $authorId = 1,
+        array $overrides = [],
     ): array {
-        return [
+        return array_merge([
             'id' => $id,
             'iid' => $id,
             'project_id' => 1,
@@ -430,7 +495,7 @@ final class SynchronizerTest extends TestCase
             'closed_at' => null,
             'updated_at' => $createdIso,
             'web_url' => 'https://gitlab.example.test/group/proj/-/merge_requests/' . $id,
-        ];
+        ], $overrides);
     }
 
     private function rowCount(string $table): int

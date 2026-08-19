@@ -33,7 +33,9 @@ final class Schema
             merged_at INTEGER,
             closed_at INTEGER,
             updated_at INTEGER NOT NULL,
-            web_url TEXT
+            web_url TEXT,
+            merge_status TEXT NOT NULL DEFAULT \'\',
+            has_conflicts INTEGER NOT NULL DEFAULT 0
         )');
 
         $database->execute('CREATE TABLE IF NOT EXISTS approvals (
@@ -47,7 +49,8 @@ final class Schema
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             mr_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
-            created_at INTEGER NOT NULL
+            created_at INTEGER NOT NULL,
+            resolved INTEGER NOT NULL DEFAULT 1
         )');
 
         $database->execute('CREATE TABLE IF NOT EXISTS commits (
@@ -89,5 +92,36 @@ final class Schema
         $database->execute('CREATE INDEX IF NOT EXISTS idx_pipelines_mr ON pipelines (mr_id)');
         $database->execute('CREATE INDEX IF NOT EXISTS idx_jobs_mr ON jobs (mr_id)');
         $database->execute('CREATE INDEX IF NOT EXISTS idx_jobs_pipeline ON jobs (pipeline_id)');
+
+        // Columns added after the initial release: `CREATE TABLE IF NOT EXISTS`
+        // is a no-op for an existing database, so existing caches need the
+        // columns added explicitly. Defaults keep old rows safe until the next
+        // sync refreshes them.
+        self::addColumnIfMissing(
+            $database,
+            'merge_requests',
+            'merge_status',
+            "TEXT NOT NULL DEFAULT ''",
+        );
+        self::addColumnIfMissing($database, 'merge_requests', 'has_conflicts', 'INTEGER NOT NULL DEFAULT 0');
+        self::addColumnIfMissing($database, 'discussions', 'resolved', 'INTEGER NOT NULL DEFAULT 1');
+    }
+
+    /**
+     * Adds a column to an existing table if it is not present already.
+     */
+    private static function addColumnIfMissing(
+        Database $database,
+        string $table,
+        string $column,
+        string $definition,
+    ): void {
+        foreach ($database->query('PRAGMA table_info(' . $table . ')') as $row) {
+            if ((string) ($row['name'] ?? '') === $column) {
+                return;
+            }
+        }
+
+        $database->execute('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $definition);
     }
 }
