@@ -112,6 +112,44 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     expect(errors).toEqual([]);
 });
 
+test('the header shows a refresh-interval segmented control with a live countdown', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    // Default is 5m, persisted via localStorage.
+    const options = page.locator('#refresh-interval .seg-control-option');
+    expect(await options.count()).toBe(4);
+    await expect(page.locator('#refresh-interval .seg-control-option.is-active')).toHaveText('5m');
+
+    const countdown = page.locator('#refresh-countdown');
+    await expect(countdown).toBeVisible();
+    expect(await countdown.textContent()).toMatch(/^\d{2}:\d{2}$/);
+
+    // The countdown ticks down every second.
+    const first = await countdown.textContent();
+    await page.waitForTimeout(1100);
+    const second = await countdown.textContent();
+    expect(second).not.toBe(first);
+
+    // Selecting "1m" updates the active option and persists to localStorage.
+    await options.filter({ hasText: '1m' }).click();
+    await expect(page.locator('#refresh-interval .seg-control-option.is-active')).toHaveText('1m');
+    const stored = await page.evaluate(() => window.localStorage.getItem('cr-dashboard-refresh-interval'));
+    expect(stored).toBe('60');
+
+    // Selecting "Off" shows "Off" instead of a countdown.
+    await options.filter({ hasText: 'Off' }).click();
+    await expect(countdown).toHaveText('Off');
+
+    // Clicking the countdown triggers an immediate POST /api/refresh.
+    await options.filter({ hasText: '1m' }).click();
+    const [request] = await Promise.all([
+        page.waitForRequest((req) => req.url().includes('/api/refresh') && req.method() === 'POST'),
+        countdown.click(),
+    ]);
+    expect(request.method()).toBe('POST');
+});
+
 test('description stays collapsed and hovers to a markdown-rendered tooltip', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');

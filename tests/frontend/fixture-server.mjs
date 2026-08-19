@@ -27,6 +27,20 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (url.pathname === '/api/refresh' && req.method === 'POST') {
+        res.writeHead(202, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ accepted: true, reason: 'queued', cooldown_remaining: 0 }));
+
+        return;
+    }
+
+    if (url.pathname === '/api/refresh' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ active: false, total: 0, done: 0 }));
+
+        return;
+    }
+
     const relative = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
     const filePath = path.resolve(publicDir, relative);
     if (!filePath.startsWith(publicDir)) {

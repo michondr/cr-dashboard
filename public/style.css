@@ -46,6 +46,69 @@ body {
     font-size: 13px;
 }
 
+/* ---------- Segmented control (reusable) ---------- */
+
+.seg-control {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.seg-control-option {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: none;
+    border-right: 1px solid var(--border);
+    padding: 2px 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    cursor: pointer;
+}
+
+.seg-control-option:last-child {
+    border-right: none;
+}
+
+.seg-control-option:hover:not(.is-active) {
+    color: var(--text);
+}
+
+.seg-control-option.is-active {
+    background: var(--accent);
+    color: #0f1420;
+}
+
+/* ---------- Refresh control (countdown + auto-trigger) ---------- */
+
+.refresh-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.refresh-countdown {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+
+.refresh-countdown:hover {
+    color: var(--text);
+}
+
+.refresh-countdown.is-refreshing {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
 .user-filter {
     margin-left: auto;
     display: flex;
@@ -746,6 +809,10 @@ body {
         order: 3;
         flex-basis: 100%;
         font-size: 12px;
+    }
+
+    .refresh-control {
+        order: 4;
     }
 
     /* Metrics: one per row with a usable chart height, scrolled vertically. */

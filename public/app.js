@@ -3,6 +3,10 @@ import { renderMarkdown } from './markdown.js';
 
 const REFRESH_MS = 60_000;
 
+const REFRESH_INTERVAL_STORAGE_KEY = 'cr-dashboard-refresh-interval';
+const REFRESH_INTERVAL_OPTIONS = [0, 60, 300, 900];
+const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
+
 const COLORS = [
     '#5b9bd5',
     '#3fb950',
@@ -118,8 +122,132 @@ const METRICS = {
     },
 };
 
-let state = { bucket: 'day', userId: readUserIdFromUrl(), focusedMetricKey: null };
+let state = {
+    bucket: 'day',
+    userId: readUserIdFromUrl(),
+    focusedMetricKey: null,
+    refreshIntervalSeconds: readRefreshInterval(),
+    refreshDeadline: null,
+    refreshCycleActive: false,
+    refreshCycleTotal: 0,
+    refreshCycleDone: 0,
+};
 let usersById = new Map();
+
+function readRefreshInterval() {
+    let raw = null;
+    try {
+        raw = window.localStorage.getItem(REFRESH_INTERVAL_STORAGE_KEY);
+    } catch {
+        raw = null;
+    }
+    if (raw === null) {
+        return DEFAULT_REFRESH_INTERVAL_SECONDS;
+    }
+
+    const stored = Number(raw);
+
+    return REFRESH_INTERVAL_OPTIONS.includes(stored) ? stored : DEFAULT_REFRESH_INTERVAL_SECONDS;
+}
+
+function saveRefreshInterval(seconds) {
+    try {
+        window.localStorage.setItem(REFRESH_INTERVAL_STORAGE_KEY, String(seconds));
+    } catch {
+        // localStorage unavailable (private mode, etc.) — the in-memory value still works.
+    }
+}
+
+function resetRefreshDeadline() {
+    state.refreshDeadline = state.refreshIntervalSeconds > 0
+        ? Date.now() + state.refreshIntervalSeconds * 1000
+        : null;
+}
+
+function renderRefreshIntervalControl() {
+    const group = document.getElementById('refresh-interval');
+    if (!group) {
+        return;
+    }
+    for (const button of group.querySelectorAll('.seg-control-option')) {
+        button.classList.toggle('is-active', Number(button.dataset.value) === state.refreshIntervalSeconds);
+    }
+}
+
+function formatCountdown(seconds) {
+    const clamped = Math.max(0, Math.round(seconds));
+    const mm = String(Math.floor(clamped / 60)).padStart(2, '0');
+    const ss = String(clamped % 60).padStart(2, '0');
+
+    return `${mm}:${ss}`;
+}
+
+async function triggerRefresh() {
+    try {
+        const params = new URLSearchParams();
+        if (state.userId) {
+            params.set('user', state.userId);
+        }
+        const query = params.toString();
+        await fetch(`/api/refresh${query ? `?${query}` : ''}`, { method: 'POST' });
+    } catch {
+        // Offline or the API is unreachable; the next tick retries.
+    }
+    resetRefreshDeadline();
+    pollRefreshStatus();
+}
+
+async function pollRefreshStatus() {
+    try {
+        const response = await fetch('/api/refresh');
+        if (!response.ok) {
+            return;
+        }
+        const status = await response.json();
+        state.refreshCycleActive = Boolean(status.active);
+        state.refreshCycleTotal = status.total || 0;
+        state.refreshCycleDone = status.done || 0;
+        if (state.refreshCycleActive) {
+            setTimeout(pollRefreshStatus, 1000);
+        } else if (state.refreshCycleTotal > 0) {
+            // A completed cycle refreshed data; pick it up.
+            loadData(state.bucket);
+        }
+    } catch {
+        state.refreshCycleActive = false;
+    }
+}
+
+function tickRefreshCountdown() {
+    const button = document.getElementById('refresh-countdown');
+    if (!button) {
+        return;
+    }
+
+    button.classList.toggle('is-refreshing', state.refreshCycleActive);
+
+    if (state.refreshCycleActive) {
+        button.textContent = `refreshing ${state.refreshCycleDone}/${state.refreshCycleTotal}`;
+
+        return;
+    }
+
+    if (state.refreshDeadline === null) {
+        button.textContent = 'Off';
+
+        return;
+    }
+
+    const remaining = (state.refreshDeadline - Date.now()) / 1000;
+    if (remaining <= 0) {
+        triggerRefresh();
+        button.textContent = formatCountdown(state.refreshIntervalSeconds);
+
+        return;
+    }
+
+    button.textContent = formatCountdown(remaining);
+}
 let charts = [];
 let chartData = null;
 let colorByUserId = new Map();
@@ -218,22 +346,6 @@ function formatRelative(secondsAgo) {
     return `${Math.floor(secondsAgo / 86400)}d ago`;
 }
 
-function formatUntil(seconds) {
-    if (seconds <= 0) {
-        return 'now';
-    }
-    if (seconds < 60) {
-        return `${seconds}s`;
-    }
-    if (seconds < 3600) {
-        return `${Math.floor(seconds / 60)}m`;
-    }
-    if (seconds < 86400) {
-        return `${Math.floor(seconds / 3600)}h`;
-    }
-
-    return `${Math.floor(seconds / 86400)}d`;
-}
 
 function yAxisValues(unit) {
     return (_u, splits) => splits.map((value) => {
@@ -610,20 +722,29 @@ function renderMrSection(label, mrs) {
 }
 
 function renderHeader(data) {
+    state.meta = data.meta;
+    tickSyncStatus();
+}
+
+// Ticks the "Last sync: Xs ago" line every second from the last-loaded meta,
+// independently of the 60s data reload (item 5: countdown control).
+function tickSyncStatus() {
     const node = document.getElementById('sync-status');
-    const meta = data.meta;
+    const meta = state.meta;
+    if (!node || !meta) {
+        return;
+    }
     if (!meta.last_sync_at) {
         node.textContent = 'Last sync: never';
+
         return;
     }
 
     const now = Date.now();
     const lastSync = Date.parse(meta.last_sync_at);
-    const nextSync = Date.parse(meta.next_sync_at);
     const lastAgo = Math.max(0, Math.floor((now - lastSync) / 1000));
-    const until = Math.max(0, Math.floor((nextSync - now) / 1000));
 
-    let text = `Last sync: ${formatRelative(lastAgo)} · next sync: ${formatUntil(until)}`;
+    let text = `Last sync: ${formatRelative(lastAgo)}`;
 
     if (meta.last_rank_at) {
         const lastRank = Date.parse(meta.last_rank_at);
@@ -1106,6 +1227,36 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleFocusedCell(state.focusedMetricKey, null);
         }
     });
+
+    const intervalGroup = document.getElementById('refresh-interval');
+    if (intervalGroup) {
+        renderRefreshIntervalControl();
+        intervalGroup.addEventListener('click', (event) => {
+            const button = event.target.closest('.seg-control-option');
+            if (!button) {
+                return;
+            }
+            state.refreshIntervalSeconds = Number(button.dataset.value);
+            saveRefreshInterval(state.refreshIntervalSeconds);
+            renderRefreshIntervalControl();
+            resetRefreshDeadline();
+            tickRefreshCountdown();
+        });
+    }
+
+    const countdown = document.getElementById('refresh-countdown');
+    if (countdown) {
+        countdown.addEventListener('click', () => {
+            triggerRefresh();
+        });
+    }
+
+    resetRefreshDeadline();
+    tickRefreshCountdown();
+    setInterval(() => {
+        tickSyncStatus();
+        tickRefreshCountdown();
+    }, 1000);
 
     loadData('day');
     setInterval(() => loadData(state.bucket), REFRESH_MS);

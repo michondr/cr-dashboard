@@ -11,6 +11,20 @@
     <header class="topbar">
         <h1>Code Review Dashboard</h1>
         <div class="sync-status" id="sync-status">Loading…</div>
+        <div class="refresh-control">
+            <div class="seg-control" id="refresh-interval" role="group" aria-label="Auto-refresh interval">
+                <button type="button" class="seg-control-option" data-value="0">Off</button>
+                <button type="button" class="seg-control-option" data-value="60">1m</button>
+                <button type="button" class="seg-control-option" data-value="300">5m</button>
+                <button type="button" class="seg-control-option" data-value="900">15m</button>
+            </div>
+            <button
+                type="button"
+                class="refresh-countdown"
+                id="refresh-countdown"
+                title="Refresh now"
+            >05:00</button>
+        </div>
         <div class="user-filter">
             <label for="user-filter-select" class="user-filter-label">My view</label>
             <select id="user-filter-select" class="user-filter-select">
