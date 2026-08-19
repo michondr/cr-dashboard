@@ -1,0 +1,4 @@
+# Code Review Dashboard sync jobs (phase 1).
+# Incremental sync every 15 minutes; open-MR refresh + retention nightly at 03:00.
+*/15 * * * * root php /app/bin/console app:sync >> /var/log/cr-dashboard/sync.log 2>&1
+0 3 * * * root php /app/bin/console app:sync --refresh-open >> /var/log/cr-dashboard/sync.log 2>&1

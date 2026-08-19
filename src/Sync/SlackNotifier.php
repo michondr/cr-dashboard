@@ -1,0 +1,208 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Sync;
+
+use App\Config\AppConfig;
+use App\Storage\Database;
+
+use function curl_exec;
+use function curl_init;
+use function curl_setopt;
+use function implode;
+use function json_encode;
+use function max;
+use function sprintf;
+
+use const JSON_THROW_ON_ERROR;
+
+/**
+ * Phase 2 - Slack notifications for new and stale MRs, posted as a flag on the
+ * sync command. On sync failure the notifications are still posted from the
+ * cached data and the message states the failure and its reason.
+ */
+final class SlackNotifier
+{
+    public function __construct(
+        private readonly Database $database,
+        private readonly AppConfig $config,
+    ) {
+    }
+
+    public function notify(int $now, null|string $syncFailure = null): void
+    {
+        if ($this->config->slackToken === '' || $this->config->slackChannel === '') {
+            return;
+        }
+
+        $messages = $this->buildMessages($now, $syncFailure);
+        $this->setLastNotify($now);
+
+        if ($messages === []) {
+            return;
+        }
+
+        $this->post(implode("\n\n", $messages));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function buildMessages(int $now, null|string $syncFailure = null): array
+    {
+        $lastNotify = $this->getLastNotify($now);
+        $newMrs = $this->newMrsSince($lastNotify);
+        $staleMrs = $this->staleMrsSince($lastNotify, $now);
+
+        $messages = [];
+        if ($newMrs !== []) {
+            $messages[] = $this->formatNewMrs($newMrs);
+        }
+        if ($staleMrs !== []) {
+            $messages[] = $this->formatStaleMrs($staleMrs);
+        }
+        if ($syncFailure !== null) {
+            $messages[] = 'Sync failed: ' . $syncFailure;
+        }
+
+        return $messages;
+    }
+
+    private function getLastNotify(int $now): int
+    {
+        $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'last_notify'");
+        if ($value === null) {
+            // First enablement: only MRs created after now are notified.
+            $this->setLastNotify($now);
+
+            return $now;
+        }
+
+        return (int) $value;
+    }
+
+    private function setLastNotify(int $now): void
+    {
+        $this->database->execute(
+            "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_notify', ?)",
+            [(string) $now],
+        );
+    }
+
+    /**
+     * @return list<array{title: string, author: string, url: string, needed: int}>
+     */
+    private function newMrsSince(int $lastNotify): array
+    {
+        $rows = $this->database->query('SELECT * FROM merge_requests WHERE created_at > ?', [$lastNotify]);
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = $this->decorateMr($row);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return list<array{title: string, author: string, url: string, needed: int}>
+     */
+    private function staleMrsSince(int $lastNotify, int $now): array
+    {
+        $staleSeconds = AppConfig::STALE_DAYS * 86400;
+        $rows = $this->database->query(
+            'SELECT * FROM merge_requests
+             WHERE state = ? AND created_at > ? AND created_at <= ?',
+            ['opened', $lastNotify - $staleSeconds, $now - $staleSeconds],
+        );
+        $result = [];
+        foreach ($rows as $row) {
+            $result[] = $this->decorateMr($row);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, int|float|string|null> $row
+     *
+     * @return array{title: string, author: string, url: string, needed: int}
+     */
+    private function decorateMr(array $row): array
+    {
+        $authorId = (int) $row['author_id'];
+        $authorName = $this->database->queryValue('SELECT name FROM users WHERE id = ?', [$authorId]);
+        $approvals = (int) $this->database->queryValue(
+            'SELECT COUNT(*) FROM approvals WHERE mr_id = ?',
+            [(int) $row['id']],
+        );
+
+        return [
+            'title' => (string) $row['title'],
+            'author' => $authorName === null ? 'unknown' : (string) $authorName,
+            'url' => (string) ($row['web_url'] ?? ''),
+            'needed' => max(0, $this->config->requiredApprovals - $approvals),
+        ];
+    }
+
+    /**
+     * @param list<array{title: string, author: string, url: string, needed: int}> $mrs
+     */
+    private function formatNewMrs(array $mrs): string
+    {
+        $lines = ['New MRs since last check:'];
+        foreach ($mrs as $mr) {
+            $lines[] = sprintf(
+                '- %s by %s — %s — needs %d more approvals',
+                $mr['title'],
+                $mr['author'],
+                $mr['url'],
+                $mr['needed'],
+            );
+        }
+        if ($this->config->appUrl !== '') {
+            $lines[] = 'Dashboard: ' . $this->config->appUrl;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param list<array{title: string, author: string, url: string, needed: int}> $mrs
+     */
+    private function formatStaleMrs(array $mrs): string
+    {
+        $lines = [];
+        foreach ($mrs as $mr) {
+            $line = sprintf('%s by %s turned stale — %s', $mr['title'], $mr['author'], $mr['url']);
+            if ($this->config->appUrl !== '') {
+                $line .= ' — Dashboard: ' . $this->config->appUrl;
+            }
+            $lines[] = $line;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function post(string $text): void
+    {
+        $payload = json_encode(
+            ['channel' => $this->config->slackChannel, 'text' => $text],
+            JSON_THROW_ON_ERROR,
+        );
+
+        $handle = curl_init('https://slack.com/api/chat.postMessage');
+        if ($handle === false) {
+            return;
+        }
+
+        curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($handle, CURLOPT_POST, true);
+        curl_setopt($handle, CURLOPT_POSTFIELDS, $payload);
+        curl_setopt($handle, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $this->config->slackToken,
+            'Content-Type: application/json',
+        ]);
+        curl_exec($handle);
+    }
+}

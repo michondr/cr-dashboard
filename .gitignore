@@ -1,0 +1,10 @@
+/vendor/
+/var/
+/config/reference.php
+/.env.local
+/.phpunit.cache/
+/phpstan.neon.cache
+/node_modules/
+/playwright-report/
+/test-results/
+/.idea/

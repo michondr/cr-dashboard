@@ -1,0 +1,24 @@
+services:
+  cr-dashboard:
+    image: cr-dashboard:latest
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - cr-dashboard-data:/var/lib/cr-dashboard
+    environment:
+      GITLAB_URL: "${GITLAB_URL:-}"
+      GITLAB_GROUP: "${GITLAB_GROUP:-}"
+      GITLAB_TOKEN: "${GITLAB_TOKEN:-}"
+      GITLAB_RPS: "${GITLAB_RPS:-8}"
+      GITLAB_PROJECTS: "${GITLAB_PROJECTS:-}"
+      RETENTION_DAYS: "${RETENTION_DAYS:-90}"
+      REQUIRED_APPROVALS: "${REQUIRED_APPROVALS:-2}"
+      JIRA_URL: "${JIRA_URL:-}"
+      SLACK_TOKEN: "${SLACK_TOKEN:-}"
+      SLACK_CHANNEL: "${SLACK_CHANNEL:-}"
+      APP_URL: "${APP_URL:-}"
+    restart: unless-stopped
+
+volumes:
+  cr-dashboard-data:

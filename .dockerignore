@@ -1,0 +1,14 @@
+.git
+.gitlab-ci.yml
+.idea
+.env
+.env.local
+.idea
+node_modules
+package-lock.json
+package.json
+playwright-report
+test-results
+tests
+var
+vendor

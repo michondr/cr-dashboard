@@ -1,0 +1,12 @@
+includes:
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+
+parameters:
+    level: 10
+    paths:
+        - src
+        - tests
+    excludePaths:
+        - tests/Fixtures
+    tmpDir: var/cache/phpstan
+    treatPhpDocTypesAsCertain: false

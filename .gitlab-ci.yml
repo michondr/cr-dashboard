@@ -1,0 +1,54 @@
+stages:
+  - test
+  - build
+
+variables:
+  COMPOSER_CACHE_DIR: "$CI_PROJECT_DIR/.composer-cache"
+
+test:
+  stage: test
+  image: php:8.5-cli
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends
+      git unzip libsqlite3-dev libcurl4-openssl-dev libpng-dev
+    - docker-php-ext-install -j"$(nproc)" sqlite3 pdo_sqlite curl
+    - curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    - curl -fsSL https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1
+    - composer install --no-interaction --prefer-dist
+    - npm ci
+    - npx playwright install --with-deps chromium
+  script:
+    # phpcs writes its cache to var/cache/phpcs-cache and does not create
+    # missing parent directories, so create var/cache first.
+    - mkdir -p var/cache
+    - vendor/bin/phpunit
+    - vendor/bin/phpstan analyse --memory-limit=1G
+    - vendor/bin/phpcs
+    - npm run test:frontend
+    - npm run test:smoke
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .composer-cache/
+      - node_modules/
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+    expire_in: 1 week
+
+build:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor
+      --context "$CI_PROJECT_DIR"
+      --dockerfile "$CI_PROJECT_DIR/Dockerfile"
+      --destination "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+      --destination "$CI_REGISTRY_IMAGE:latest"
+  only:
+    - main

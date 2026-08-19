@@ -1,0 +1,13 @@
+{
+    "name": "cr-dashboard-frontend",
+    "private": true,
+    "type": "module",
+    "description": "Frontend test tooling: mean/median toggle unit test and Playwright smoke test.",
+    "scripts": {
+        "test:frontend": "node --test tests/frontend/toggle.test.mjs",
+        "test:smoke": "playwright test -c tests/frontend/playwright.config.mjs"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.49.0"
+    }
+}

@@ -1,0 +1,29 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+
+    App\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
+
+    App\Config\AppConfig:
+        arguments:
+            $databasePath: '%env(DATABASE_PATH)%'
+            $gitlabUrl: '%env(GITLAB_URL)%'
+            $gitlabGroup: '%env(GITLAB_GROUP)%'
+            $gitlabToken: '%env(GITLAB_TOKEN)%'
+            $gitlabRps: '%env(float:GITLAB_RPS)%'
+            $gitlabProjects: '%env(csv:GITLAB_PROJECTS)%'
+            $retentionDays: '%env(int:RETENTION_DAYS)%'
+            $requiredApprovals: '%env(int:REQUIRED_APPROVALS)%'
+            $jiraUrl: '%env(JIRA_URL)%'
+            $slackToken: '%env(SLACK_TOKEN)%'
+            $slackChannel: '%env(SLACK_CHANNEL)%'
+            $appUrl: '%env(APP_URL)%'
+            $projectRoot: '%kernel.project_dir%'

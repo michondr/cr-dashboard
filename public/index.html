@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Code Review Dashboard</title>
+    <link rel="stylesheet" href="vendor/uplot.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>Code Review Dashboard</h1>
+        <div class="sync-status" id="sync-status">Loading…</div>
+    </header>
+
+    <main class="layout">
+        <section class="mr-panel">
+            <div class="mr-header" aria-hidden="true">
+                <span class="col-jira">Jira</span>
+                <span class="col-mr">MR</span>
+                <span class="col-title">Title</span>
+                <span class="col-desc">Description</span>
+                <span class="col-author">Author</span>
+                <span class="col-state">State</span>
+                <span class="col-age">Age</span>
+                <span class="col-first">1st App</span>
+                <span class="col-pipe">Pipe</span>
+                <span class="col-commits">Commits</span>
+            </div>
+            <div class="mr-list" id="mr-list"></div>
+        </section>
+
+        <section class="stats-panel" id="stats-panel"></section>
+    </main>
+
+    <script src="vendor/uplot.min.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>
