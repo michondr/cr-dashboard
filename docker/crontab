@@ -1,6 +1,8 @@
-# Code Review Dashboard sync jobs (phase 1).
-# Incremental sync every 15 minutes; open-MR refresh + retention nightly at 03:00.
+# Code Review Dashboard sync jobs (phase 3: SSE live refresh).
+# Incremental sync every 15 minutes; open-MR refresh + retention + Slack
+# new/stale-MR notifications nightly at 03:00 (on-demand refreshes are now
+# driven by app:refresh-worker, see docker/supervisord.conf).
 # User ranking (all-time MR counts for list ordering) recomputed daily at 04:33.
 */15 * * * * root php /app/bin/console app:sync >> /var/log/cr-dashboard/sync.log 2>&1
-0 3 * * * root php /app/bin/console app:sync --refresh-open >> /var/log/cr-dashboard/sync.log 2>&1
+0 3 * * * root php /app/bin/console app:sync --refresh-open --notify-slack >> /var/log/cr-dashboard/sync.log 2>&1
 33 4 * * * root php /app/bin/console app:rank-users >> /var/log/cr-dashboard/sync.log 2>&1
