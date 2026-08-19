@@ -101,7 +101,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 60px 110px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 288px 110px 100px 120px 44px 90px;
+    grid-template-columns: 60px 110px minmax(220px, 1fr) minmax(90px, 140px) 150px 288px 110px 100px 120px 44px 90px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -141,6 +141,8 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 15px;
+    font-weight: 600;
 }
 
 .desc {
