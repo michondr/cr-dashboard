@@ -364,6 +364,13 @@ subscribing is allowed, publishing requires the JWT (`MERCURE_JWT_SECRET`). Topi
 public: `refresh` for cycle/progress events, `data` for "a row changed, refetch"
 events.
 
+`GET /api/presence` returns `{online}`: the number of distinct active subscribers to the
+`data` topic, read from the Mercure hub's subscription API (`subscriptions` enabled in
+docker/mercure.Caddyfile) with the same HMAC JWT used for publishing (it also carries a
+`subscribe: ["*"]` claim). Every connected dashboard subscribes to `data`, so this is the
+"N online" headcount shown in the topbar — a reminder that connected dashboards share the
+GitLab API rate limit.
+
 ### 4.8 API contract
 
 `GET /api/data?bucket=week|day|hour` returns JSON. The backend computes every per-MR and per-person value from the cache; the frontend renders them. `bucket` selects the chart granularity (default `day`) — the frontend re-requests with a different `bucket` when the user zooms. Duration/size metrics carry both a `mean` and a `median` series; the frontend picks which to draw from the mean/median cookie.

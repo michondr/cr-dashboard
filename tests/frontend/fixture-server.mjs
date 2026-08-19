@@ -41,6 +41,13 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    if (url.pathname === '/api/presence') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ online: global.__presenceOnline ?? 3 }));
+
+        return;
+    }
+
     if (url.pathname === '/.well-known/mercure') {
         // A minimal SSE stub standing in for the Mercure hub: keeps the
         // connection open and, if a test primed `global.__ssePending`

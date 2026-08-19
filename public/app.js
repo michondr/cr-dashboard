@@ -9,6 +9,7 @@ const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
 
 const MERCURE_URL = '/.well-known/mercure';
 const SSE_ERROR_THRESHOLD = 3;
+const PRESENCE_POLL_MS = 15_000;
 
 const COLORS = [
     '#5b9bd5',
@@ -207,6 +208,25 @@ function handleRefreshEvent(payload) {
 
     if (payload.type === 'changed') {
         refetchAndPatchRow(payload.mr_id);
+    }
+}
+
+async function pollPresence() {
+    try {
+        const response = await fetch('/api/presence');
+        if (!response.ok) {
+            return;
+        }
+        const body = await response.json();
+        const node = document.getElementById('presence');
+        const count = document.getElementById('presence-count');
+        if (!node || !count || typeof body.online !== 'number') {
+            return;
+        }
+        count.textContent = String(body.online);
+        node.hidden = false;
+    } catch {
+        // Leave the last-known count (or stay hidden) until the next poll succeeds.
     }
 }
 
@@ -1374,6 +1394,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadData('day');
     connectRefreshStream();
+    pollPresence();
+    setInterval(pollPresence, PRESENCE_POLL_MS);
     // While SSE is connected, `data`-topic events drive targeted refetches
     // instead of this poll; it only resumes as a fallback once the stream
     // has errored persistently (see connectRefreshStream()).

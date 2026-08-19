@@ -175,6 +175,16 @@ test('SSE refresh events fill a row\'s progress and clear it again on completion
         .toBe('');
 });
 
+test('the topbar shows a connected-users indicator with a rate-limit tooltip', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    const presence = page.locator('#presence');
+    await expect(presence).toBeVisible();
+    await expect(presence).toContainText('3 online');
+    expect(await presence.getAttribute('title')).toContain('share the GitLab API rate limit');
+});
+
 test('description stays collapsed and hovers to a markdown-rendered tooltip', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');

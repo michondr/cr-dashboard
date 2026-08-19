@@ -24,6 +24,8 @@ services:
             $url: '%env(MERCURE_URL)%'
             $jwtProvider: '@Symfony\Component\Mercure\Jwt\TokenProviderInterface'
 
+    App\Mercure\MercureSubscriptionReaderInterface: '@App\Mercure\HttpMercureSubscriptionReader'
+
     App\Config\AppConfig:
         arguments:
             $databasePath: '%env(DATABASE_PATH)%'

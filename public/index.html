@@ -25,6 +25,12 @@
                 title="Refresh now"
             >05:00</button>
         </div>
+        <div
+            class="presence"
+            id="presence"
+            hidden
+            title="All connected dashboards share the GitLab API rate limit; refreshes take longer when more people are online."
+        ><span class="presence-dot">●</span> <span id="presence-count">0</span> online</div>
         <div class="user-filter">
             <label for="user-filter-select" class="user-filter-label">My view</label>
             <select id="user-filter-select" class="user-filter-select">

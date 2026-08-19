@@ -37,7 +37,7 @@ final class HmacTokenProviderTest extends TestCase
         self::assertSame(['typ' => 'JWT', 'alg' => 'HS256'], $decodedHeader);
 
         $decodedPayload = json_decode($this->base64UrlDecode($payload), true);
-        self::assertSame(['mercure' => ['publish' => ['*']]], $decodedPayload);
+        self::assertSame(['mercure' => ['publish' => ['*'], 'subscribe' => ['*']]], $decodedPayload);
 
         $expectedSignature = $this->base64UrlEncode(
             hash_hmac('sha256', $header . '.' . $payload, 'super-secret', true),

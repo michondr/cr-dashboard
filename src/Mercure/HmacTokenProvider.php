@@ -13,10 +13,12 @@ use function rtrim;
 use function strtr;
 
 /**
- * Signs a fixed publisher JWT (`{"mercure":{"publish":["*"]}}`, HS256) with
- * `MERCURE_JWT_SECRET`. Avoids adding lcobucci/jwt as a dependency: the
- * Mercure hub only needs a standards-compliant HS256 token, which is cheap to
- * build with `hash_hmac` directly.
+ * Signs a fixed JWT (`{"mercure":{"publish":["*"],"subscribe":["*"]}}`,
+ * HS256) with `MERCURE_JWT_SECRET`. Avoids adding lcobucci/jwt as a
+ * dependency: the Mercure hub only needs a standards-compliant HS256 token,
+ * which is cheap to build with `hash_hmac` directly. The `subscribe` claim
+ * (added alongside `publish` for item 7) lets the same token read the hub's
+ * subscription API for the "N online" count.
  */
 final class HmacTokenProvider implements TokenProviderInterface
 {
@@ -27,7 +29,7 @@ final class HmacTokenProvider implements TokenProviderInterface
     public function getJwt(): string
     {
         $header = $this->encode(['typ' => 'JWT', 'alg' => 'HS256']);
-        $payload = $this->encode(['mercure' => ['publish' => ['*']]]);
+        $payload = $this->encode(['mercure' => ['publish' => ['*'], 'subscribe' => ['*']]]);
         $signingInput = $header . '.' . $payload;
         $signature = $this->base64UrlEncode(hash_hmac('sha256', $signingInput, $this->secret, true));
 
