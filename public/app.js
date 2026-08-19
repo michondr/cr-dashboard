@@ -350,19 +350,17 @@ function renderMrRow(mr, dimmed) {
     row.appendChild(author);
 
     const stateCell = el('span', 'col-state');
-    const ready = mr.state === 'opened'
-        && !mr.draft
-        && Array.isArray(mr.approvers)
-        && mr.approvers.length >= (state.requiredApprovals || 0)
-        && mr.pipeline && mr.pipeline.indicator === 'check';
-    const stateLabel = ready ? 'ready' : mr.state;
-    stateCell.textContent = `${stateLabel} ${mr.commit_count} commit${mr.commit_count === 1 ? '' : 's'}`;
-    if (ready) {
-        stateCell.classList.add('state-ready');
-    }
-    if (mr.draft) {
-        const badge = el('span', 'badge');
-        badge.textContent = 'draft';
+    const badges = [
+        mr.draft && ['draft', 'status-draft'],
+        mr.needs_rebase && ['needs rebase', 'status-needs-rebase'],
+        mr.unresolved_discussions > 0 && ['unresolved discussion 📝', 'status-unresolved'],
+        mr.stale && ['stale 💩', 'status-stale'],
+        mr.approved && !mr.ready && ['approved', 'status-approved'],
+        mr.ready && ['ready ✅', 'status-ready'],
+    ].filter(Boolean);
+    for (const [label, cls] of badges) {
+        const badge = el('span', `badge ${cls}`);
+        badge.textContent = label;
         stateCell.appendChild(badge);
     }
     row.appendChild(stateCell);
@@ -781,7 +779,6 @@ async function loadData(bucket) {
         }
         const data = await response.json();
         state.jiraUrl = data.meta.jira_url || '';
-        state.requiredApprovals = data.meta.required_approvals || 0;
         usersById = new Map((data.users || []).map((user) => [String(user.id), user]));
         chartData = data;
         renderAll(data);

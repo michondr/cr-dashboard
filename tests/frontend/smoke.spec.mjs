@@ -29,8 +29,13 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
         await page.locator('.col-approvers .avatar, .col-approvers .avatar-fallback').count()
     ).toBeGreaterThanOrEqual(1);
 
-    // An open MR with enough approvals and a green pipeline is "ready".
-    expect(await page.locator('.col-state.state-ready').count()).toBeGreaterThanOrEqual(1);
+    // Every status badge renders on at least one MR row.
+    expect(await page.locator('.col-state .status-ready').count()).toBeGreaterThanOrEqual(1);
+    expect(await page.locator('.col-state .status-stale').count()).toBeGreaterThanOrEqual(1);
+    expect(await page.locator('.col-state .status-needs-rebase').count()).toBeGreaterThanOrEqual(1);
+    expect(await page.locator('.col-state .status-unresolved').count()).toBeGreaterThanOrEqual(1);
+    expect(await page.locator('.col-state .status-approved').count()).toBeGreaterThanOrEqual(1);
+    expect(await page.locator('.col-state .status-draft').count()).toBeGreaterThanOrEqual(1);
 
     // All nine metric cells render.
     expect(await page.locator('.cell').count()).toBe(9);

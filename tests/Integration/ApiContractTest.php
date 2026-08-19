@@ -126,6 +126,11 @@ final class ApiContractTest extends TestCase
         self::assertArrayHasKey('avatar_url', $firstApprover);
         self::assertIsString($firstApprover['approved_at']);
 
+        self::assertFalse($openMr['needs_rebase']);
+        self::assertSame(0, $openMr['unresolved_discussions']);
+        self::assertFalse($openMr['approved'], 'one approval is below the required two');
+        self::assertFalse($openMr['ready']);
+
         self::assertArrayHasKey('metrics', $payload);
         $metrics = $payload['metrics'];
         self::assertIsArray($metrics);

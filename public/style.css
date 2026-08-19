@@ -101,7 +101,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 120px 110px 100px 120px 44px 90px;
+    grid-template-columns: 110px 70px minmax(180px, 1.2fr) minmax(140px, 2fr) 150px 180px 110px 100px 120px 44px 90px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -216,16 +216,40 @@ body {
     color: var(--text-dim);
 }
 
+.col-state {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
 .badge {
-    margin-left: 6px;
     padding: 1px 6px;
     border-radius: 9px;
     font-size: 11px;
-    border: 1px solid var(--border);
+    border: 1px solid currentColor;
     color: var(--text-dim);
+    white-space: nowrap;
 }
 
-.col-state.state-ready {
+.status-needs-rebase {
+    color: var(--fail);
+}
+
+.status-unresolved {
+    color: #bc8cff;
+}
+
+.status-stale {
+    color: var(--warn);
+}
+
+.status-approved {
+    color: var(--accent);
+}
+
+.status-ready {
     color: var(--ok);
     font-weight: 600;
 }

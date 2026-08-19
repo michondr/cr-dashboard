@@ -48,6 +48,8 @@ $mr = static function (
         'closed_at' => null,
         'updated_at' => $iso($created),
         'web_url' => 'https://gitlab.example.test/group/app/-/merge_requests/' . $id,
+        'merge_status' => 'can_be_merged',
+        'has_conflicts' => false,
     ];
 };
 $commit = static fn (string $sha, string $message, int $when): array => [
@@ -66,6 +68,12 @@ $client->projects = [
     ['id' => 1, 'path_with_namespace' => 'group/app'],
 ];
 
+$blockedMr = $mr(208, 'opened', $now - (2 * DAY), null, 2, 'REC-204 - Export the web');
+$blockedMr['merge_status'] = 'cannot_be_merged';
+$blockedMr['has_conflicts'] = true;
+$draftMr = $mr(209, 'opened', $now - DAY, null, 1, 'REC-205 - Draft the docs');
+$draftMr['draft'] = true;
+
 $client->mergeRequests['all'] = [
     $mr(301, 'merged', $now - (6 * DAY), $now - (2 * DAY), 1, 'REC-101 - Ship the parser'),
     $mr(302, 'merged', $now - (20 * DAY), $now - (12 * DAY), 2, 'REC-102 - Refactor the cache'),
@@ -76,6 +84,8 @@ $client->mergeRequests['all'] = [
     $mr(205, 'opened', $now - (3 * DAY), null, 1, 'REC-201 - Polish the onboarding'),
     $mr(206, 'opened', $now - (5 * DAY), null, 2, 'REC-202 - Cache invalidation fix'),
     $mr(207, 'opened', $now - (8 * DAY), null, 3, 'REC-203 - Add an audit log'),
+    $blockedMr,
+    $draftMr,
 ];
 $client->mergeRequests['opened'] = array_values(array_filter(
     $client->mergeRequests['all'],
@@ -98,12 +108,22 @@ $client->approvalsByIid[201] = ['approved_by' => [
     ['user' => $user(3), 'approved_at' => $iso($now - DAY + 3600)],
 ]];
 $client->approvalsByIid[203] = ['approved_by' => []];
+$client->approvalsByIid[206] = ['approved_by' => [
+    ['user' => $user(1), 'approved_at' => $iso($now - DAY)],
+    ['user' => $user(3), 'approved_at' => $iso($now - 3600)],
+]];
 
 $client->discussionsByIid[201] = [
     ['notes' => [['system' => false, 'author' => $user(3), 'created_at' => $iso($now - DAY + 3600)]]],
 ];
 $client->discussionsByIid[204] = [
-    ['notes' => [['system' => false, 'author' => $user(2), 'created_at' => $iso($now - 7200)]]],
+    ['notes' => [[
+        'system' => false,
+        'author' => $user(2),
+        'created_at' => $iso($now - 7200),
+        'resolvable' => true,
+        'resolved' => false,
+    ]]],
 ];
 
 $client->pipelinesByIid[201] = [

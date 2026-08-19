@@ -170,7 +170,11 @@ final class ApiBuilder
      *   pipeline: array{status: string, indicator: string, tint: string|null},
      *   approvers: list<array{
      *     id: int, name: string, username: string, avatar_url: string|null, approved_at: string|null
-     *   }>
+     *   }>,
+     *   needs_rebase: bool,
+     *   unresolved_discussions: int,
+     *   approved: bool,
+     *   ready: bool
      * }
      */
     private function buildMrRow(array $mr, array $projectPaths, Dataset $dataset, int $now): array
@@ -201,6 +205,16 @@ final class ApiBuilder
             );
         }
 
+        $pipeline = $this->pipelineFor($dataset, $id);
+        $approvers = $this->approversFor($dataset, $id);
+        $unresolvedDiscussions = $this->unresolvedDiscussionCount($dataset, $id);
+        $approved = count($approvers) >= $this->config->requiredApprovals;
+        $ready = $approved && $pipeline['indicator'] === 'check' && $unresolvedDiscussions === 0;
+        $mergeStatus = (string) ($mr['merge_status'] ?? '');
+        $needsRebase = (int) ($mr['has_conflicts'] ?? 0) === 1
+            || $mergeStatus === 'cannot_be_merged'
+            || $mergeStatus === 'cannot_be_merged_recheck';
+
         return [
             'id' => $id,
             'iid' => $iid,
@@ -220,8 +234,12 @@ final class ApiBuilder
             'time_to_first_approval_seconds' => $this->firstApprovalSeconds($dataset, $id, $createdAt),
             'commit_count' => count($commitShas),
             'commit_diff_urls' => $commitDiffUrls,
-            'pipeline' => $this->pipelineFor($dataset, $id),
-            'approvers' => $this->approversFor($dataset, $id),
+            'pipeline' => $pipeline,
+            'approvers' => $approvers,
+            'needs_rebase' => $needsRebase,
+            'unresolved_discussions' => $unresolvedDiscussions,
+            'approved' => $approved,
+            'ready' => $ready,
         ];
     }
 
@@ -258,6 +276,25 @@ final class ApiBuilder
         }
 
         return $first === null ? null : $first - $createdAt;
+    }
+
+    /**
+     * Discussion threads of an MR that have at least one unresolved resolvable
+     * note. Feeds the "unresolved discussion" status badge.
+     */
+    private function unresolvedDiscussionCount(Dataset $dataset, int $mrId): int
+    {
+        $count = 0;
+        foreach ($dataset->discussions as $discussion) {
+            if ((int) $discussion['mr_id'] !== $mrId) {
+                continue;
+            }
+            if ((int) ($discussion['resolved'] ?? 1) === 0) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /**
