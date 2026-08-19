@@ -50,8 +50,12 @@ final class Synchronizer
     }
 
     /**
-     * Full backfill: every project, every MR (all states, all pages), and every
-     * sub-resource of every MR.
+     * Full backfill: every project, all currently open MRs (any age) plus every
+     * MR updated within the retention window (all states, all pages), and every
+     * sub-resource of every MR. Merged/closed MRs older than the retention
+     * window are never fetched — they would be pruned by applyRetention right
+     * after the fetch, so pulling them (and their sub-resources) is pure waste.
+     * Open MRs are never pruned, so they are always fetched regardless of age.
      */
     public function full(int $now, null|OutputInterface $output = null): void
     {
@@ -66,8 +70,18 @@ final class Synchronizer
             $projectsById = $this->fetchProjects();
             $this->report(sprintf('  %d project(s).', count($projectsById)));
 
-            $this->report('Fetching all merge requests (all states, all pages)...');
-            $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'all']);
+            $window = $now - ($this->config->retentionDays * 86400);
+            $this->report(sprintf(
+                'Fetching merge requests (open + updated within %d days)...',
+                $this->config->retentionDays,
+            ));
+            $mrs = $this->mergeAndDedup(
+                $this->client->groupMergeRequests($this->config->gitlabGroup, ['state' => 'opened']),
+                $this->client->groupMergeRequests($this->config->gitlabGroup, [
+                    'state' => 'all',
+                    'updated_after' => gmdate(DATE_ATOM, $window),
+                ]),
+            );
             $total = count($mrs);
             $this->report(sprintf('  %d MR(s) fetched; syncing sub-resources...', $total));
 
@@ -446,20 +460,30 @@ final class Synchronizer
      * Append-only by (mr_id, sha): new shas insert with stats fetched once,
      * existing shas are re-marked `current`.
      *
+     * The write is an upsert rather than a SELECT-then-INSERT/UPDATE: GitLab's
+     * commits response can return the same sha more than once (pagination
+     * overlap, merge history), and a plain INSERT then throws on the
+     * UNIQUE (mr_id, sha) constraint. ON CONFLICT keeps the cached stats —
+     * they are immutable and fetched only once per sha — and just refreshes
+     * the `current` flag, message and date.
+     *
      * @param list<array<string, mixed>> $commits
      */
     private function storeCommits(int $mrId, int $projectId, array $commits): void
     {
         $this->database->execute('UPDATE commits SET current = 0 WHERE mr_id = ?', [$mrId]);
 
+        $seen = [];
         foreach ($commits as $commit) {
             if (!is_array($commit)) {
                 continue;
             }
             $sha = $this->stringValue($commit, 'id');
-            if ($sha === '') {
+            if ($sha === '' || array_key_exists($sha, $seen)) {
                 continue;
             }
+            $seen[$sha] = true;
+
             $message = $this->stringValue($commit, 'title');
             $committedAt = $this->parseTime($commit['committed_date'] ?? null);
 
@@ -470,17 +494,22 @@ final class Synchronizer
 
             if ($existing === null) {
                 $stats = $this->fetchCommitStats($projectId, $sha);
-                $this->database->execute(
-                    'INSERT INTO commits (mr_id, sha, message, committed_date, current, additions, deletions)
-                     VALUES (?, ?, ?, ?, 1, ?, ?)',
-                    [$mrId, $sha, $message, $committedAt, $stats['additions'], $stats['deletions']],
-                );
+                $additions = $stats['additions'];
+                $deletions = $stats['deletions'];
             } else {
-                $this->database->execute(
-                    'UPDATE commits SET current = 1, message = ?, committed_date = ? WHERE mr_id = ? AND sha = ?',
-                    [$message, $committedAt, $mrId, $sha],
-                );
+                $additions = null;
+                $deletions = null;
             }
+
+            $this->database->execute(
+                'INSERT INTO commits (mr_id, sha, message, committed_date, current, additions, deletions)
+                 VALUES (?, ?, ?, ?, 1, ?, ?)
+                 ON CONFLICT(mr_id, sha) DO UPDATE SET
+                    current = 1,
+                    message = excluded.message,
+                    committed_date = excluded.committed_date',
+                [$mrId, $sha, $message, $committedAt, $additions, $deletions],
+            );
         }
     }
 
@@ -535,6 +564,38 @@ final class Synchronizer
         }
 
         return $projectsById;
+    }
+
+    /**
+     * Union two MR lists, dropping a second occurrence of any MR id. The open
+     * list and the recent list overlap on open MRs updated within the window;
+     * syncing an MR twice is idempotent but wastes the sub-resource fetches,
+     * so dedup keeps each MR's sub-resource calls to one set per backfill.
+     *
+     * @param list<array<string, mixed>> $a
+     * @param list<array<string, mixed>> $b
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function mergeAndDedup(array $a, array $b): array
+    {
+        $seen = [];
+        $result = [];
+        foreach ([$a, $b] as $mrs) {
+            foreach ($mrs as $mr) {
+                if (!is_array($mr)) {
+                    continue;
+                }
+                $id = $this->intValue($mr, 'id');
+                if ($id === 0 || array_key_exists($id, $seen)) {
+                    continue;
+                }
+                $seen[$id] = true;
+                $result[] = $mr;
+            }
+        }
+
+        return $result;
     }
 
     /**
