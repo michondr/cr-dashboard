@@ -14,11 +14,11 @@ The dashboard has no login. The VPN is the security boundary. The GitLab token l
 
 ### 2.1 Page layout
 
-The page does not scroll. The MR list takes the top 55% of the viewport. The user stats take the bottom 45%. The MR list scrolls internally.
+The page does not scroll. The MR list takes the top 55% of the viewport. The user stats take the bottom 45%. The MR list scrolls internally. Minimum supported viewport: 1920×1080 (Full HD).
 
 ```
 +------------------------------------------------------------------+
-|  Code Review Dashboard                                           |
+|  Code Review Dashboard      Last sync: 2m ago · next sync: 13m    |
 +------------------------------------------------------------------+
 |  MR LIST (55% height, internal scroll)                           |
 |  +------------------------------------------------------------+  |
@@ -36,18 +36,18 @@ The page does not scroll. The MR list takes the top 55% of the viewport. The use
 +------------------------------------------------------------------+
 |  USER STATS (45% height)                                          |
 |  +----------+ +----------+ +----------+ +----------+ +----------+|
-|  | First try| | Coverage | |Time to   | | Stale    | |Approvals ||
-|  | %    (?) | | %    (?) | |review(?)⇄| | MRs  (?) | |given  (?)||
-|  |  graph   | |  graph   | |  graph   | |  graph   | |  graph   ||
-|  |  (avatar)| |  (avatar)| |  (avatar)| |  (avatar)| |  (avatar)||
+|  | Coverage | |Time to   | | Stale    | |Approvals | |Time to   ||
+|  |   %  (?) | |review(?)⇄| | MRs  (?) | |given  (?)| |first app ||
+|  |  graph   | |  graph   | |  graph   | |  graph   | |    (?)⇄  ||
+|  |  (avatar)| |  (avatar)| |  (avatar)| |  (avatar)| |  graph   ||
 |  +----------+ +----------+ +----------+ +----------+ +----------+|
-|  +----------+ +----------+ +----------+ +----------+ +----------+|
-|  |Time to   | |Time to   | |First     | |MR size   | |Merged    ||
-|  |first app | |merge     | |response  | |    (?)⇄  | |MR count  ||
-|  |    (?)⇄  | |    (?)⇄  | |time  (?)⇄| |  graph   | |   (?)    ||
-|  |  graph   | |  graph   | |  graph   | |  graph   | |  graph   ||
-|  |  (avatar)| |  (avatar)| |  (avatar)| |  (avatar)| |  (avatar)||
-|  +----------+ +----------+ +----------+ +----------+ +----------+|
+|  +----------+ +----------+ +----------+ +----------+            |
+|  |Time to   | |First     | |MR size   | |Merged    |            |
+|  |merge     | |response  | |    (?)⇄  | |MR count  |            |
+|  |    (?)⇄  | |time  (?)⇄| |  graph   | |   (?)    |            |
+|  |  graph   | |  graph   | |  graph   | |  graph   |            |
+|  |  (avatar)| |  (avatar)| |  (avatar)| |  (avatar)|            |
+|  +----------+ +----------+ +----------+ +----------+            |
 +------------------------------------------------------------------+
 ```
 
@@ -92,7 +92,7 @@ The Jira ticket links to the Jira issue. The title and the MR number link to the
 
 ```
 +----------------------+
-| First try %      (?) |
+| Time to review (?)⇄ |
 | 100%                 |
 |  \  o  o  o  o  o  o |
 |   \ o  o  o  o  o  o |   one line per person
@@ -123,37 +123,38 @@ Each cell header shows a `(?)` tooltip icon. Duration/size cells also show a `�
 14. As a team member, I want the time to first approval of each MR, so that I know review speed.
 15. As a team member, I want stale MRs collapsed into one link, so that the list stays short.
 16. As a team member, I want the stale link to show author names and counts, so that I know who owns them.
-17. As a team member, I want a graph of first-try percentage per person, so that I know review outcomes.
-18. As a team member, I want a graph of coverage percentage per person, so that I know who reviews.
-19. As a team member, I want a graph of time to review per person, so that I know review speed.
-20. As a team member, I want a graph of stale MR count per person, so that I know who leaves MRs open.
-21. As a team member, I want a graph of approvals given per person, so that I know the review load.
-22. As a team member, I want a graph of time to merge per person, so that I know shipping speed.
-23. As a team member, I want a graph of first response time per person, so that I know first reactions.
-24. As a team member, I want a graph of MR size per person, so that I know review difficulty.
-25. As a team member, I want the median alongside the mean, so that outliers do not mislead me.
-26. As a team member, I want to zoom the graphs, so that I can see daily or hourly detail.
-27. As a team member, I want the median toggle saved, so that my choice persists.
-28. As a team member, I want each person's line to end at their avatar, so that I can read the graph.
-29. As a team member, I want a tooltip on each metric, so that I understand the score.
-30. As a team member, I want the page to fit the viewport, so that I do not scroll.
-31. As a team member, I want fresh data on page load, so that I see current state.
-32. As a team member, I want a Slack message when new MRs appear, so that I know to review them (phase 2).
-33. As a team member, I want the Slack message to state how many approvals are needed, so that I know the target (phase 2).
-34. As a team member, I want the dashboard to run as one Docker image, so that deployment is simple.
-35. As a team member, I want the image built in the GitLab pipeline, so that the build is automatic.
-36. As a team member, I want to run the same image locally, so that I can test changes.
-37. As a team member, I want the GitLab URL, group, and token in environment variables, so that I can point the tool at any instance.
-38. As a team member, I want the required approval count in an environment variable, so that the team can change it.
-39. As a team member, I want the Jira URL in an environment variable, so that the team can change it.
-40. As a team member, I want the Slack token and channel in environment variables, so that the team can change them (phase 2).
-41. As a team member, I want closed MRs shown with a "closed" indicator, so that I can see what was abandoned.
-42. As a team member, I want a graph of merged MR count per person, so that I know who ships.
-43. As a team member, I want a mean/median switch on each duration cell, shared across all cells and persisted, so that I can compare averages and medians.
-44. As a team member, I want the pipeline spinner red when a job already failed and orange when a job warned, so that I see trouble while the build runs.
-45. As a team member, I want MR size to reflect the latest commits, so that added commits are counted.
-46. As a team member, I want Slack to send one bundled list of new MRs and a nudge for stale MRs, so that notifications stay useful (phase 2).
-47. As a team member, I want the Slack message to link to the dashboard, so that I can open it directly (phase 2).
+17. As a team member, I want a graph of coverage percentage per person, so that I know who reviews.
+18. As a team member, I want a graph of time to review per person, so that I know review speed.
+19. As a team member, I want a graph of stale MR count per person, so that I know who leaves MRs open.
+20. As a team member, I want a graph of approvals given per person, so that I know the review load.
+21. As a team member, I want a graph of time to merge per person, so that I know shipping speed.
+22. As a team member, I want a graph of first response time per person, so that I know first reactions.
+23. As a team member, I want a graph of MR size per person, so that I know review difficulty.
+24. As a team member, I want the median alongside the mean, so that outliers do not mislead me.
+25. As a team member, I want to zoom the graphs, so that I can see daily or hourly detail.
+26. As a team member, I want the median toggle saved, so that my choice persists.
+27. As a team member, I want each person's line to end at their avatar, so that I can read the graph.
+28. As a team member, I want a tooltip on each metric, so that I understand the score.
+29. As a team member, I want the page to fit the viewport, so that I do not scroll.
+30. As a team member, I want fresh data on page load, so that I see current state.
+31. As a team member, I want a Slack message when new MRs appear, so that I know to review them (phase 2).
+32. As a team member, I want the Slack message to state how many approvals are needed, so that I know the target (phase 2).
+33. As a team member, I want the dashboard to run as one Docker image, so that deployment is simple.
+34. As a team member, I want the image built in the GitLab pipeline, so that the build is automatic.
+35. As a team member, I want to run the same image locally, so that I can test changes.
+36. As a team member, I want the GitLab URL, group, and token in environment variables, so that I can point the tool at any instance.
+37. As a team member, I want the required approval count in an environment variable, so that the team can change it.
+38. As a team member, I want the Jira URL in an environment variable, so that the team can change it.
+39. As a team member, I want the Slack token and channel in environment variables, so that the team can change them (phase 2).
+40. As a team member, I want closed MRs shown with a "closed" indicator, so that I can see what was abandoned.
+41. As a team member, I want a graph of merged MR count per person, so that I know who ships.
+42. As a team member, I want a mean/median switch on each duration cell, shared across all cells and persisted, so that I can compare averages and medians.
+43. As a team member, I want the pipeline spinner red when a job already failed and orange when a job warned, so that I see trouble while the build runs.
+44. As a team member, I want MR size to reflect the latest commits, so that added commits are counted.
+45. As a team member, I want Slack to send one bundled list of new MRs and a nudge for stale MRs, so that notifications stay useful (phase 2).
+46. As a team member, I want the Slack message to link to the dashboard, so that I can open it directly (phase 2).
+47. As a team member, I want to see when the data was last synced, so that I know how fresh it is.
+48. As a team member, I want to see when the next sync will run, so that I know when the data will refresh.
 
 ## 4. Implementation Decisions
 
@@ -161,17 +162,16 @@ Each cell header shows a `(?)` tooltip icon. Duration/size cells also show a `�
 
 The app is a Symfony application in PHP 8.5. The app has one container. The container runs nginx, php-fpm, and cron. Supervisor starts all three processes.
 
-The app has three entry points:
+The app has two entry points:
 
 - A web app. It serves the dashboard page and the JSON API. *(phase 1)*
-- A CLI command `app:sync`. It fetches data from GitLab and caches it. It takes two flags: `--full` (one-time backfill) and `--refresh-open` (re-fetch sub-resources for all open MRs). *(phase 1)*
-- A CLI command `app:notify-slack`. It syncs and pings Slack for new and stale MRs. *(phase 2)*
+- A CLI command `app:sync`. It fetches data from GitLab and caches it. Flags: `--full` (one-time backfill), `--refresh-open` (re-fetch sub-resources for all open MRs), and `--notify-slack` (after the sync, post Slack notifications for new and stale MRs — phase 2). *(phase 1)*
 
 Cron:
 
 - Every 15 minutes: `app:sync` (incremental). *(phase 1)*
-- Nightly: `app:sync --refresh-open`. *(phase 1)*
-- Every 15 minutes: `app:notify-slack`. *(phase 2)*
+- Nightly at 03:00: `app:sync --refresh-open`. *(phase 1)*
+- Phase 2 replaces the 15-minute line with `app:sync --notify-slack`.
 
 ### 4.2 Environment variables
 
@@ -180,7 +180,9 @@ Cron:
 | `GITLAB_URL` | GitLab base URL | none |
 | `GITLAB_GROUP` | Group path, for example `company` | none |
 | `GITLAB_TOKEN` | Personal access token, `read_api` scope | none |
-| `GITLAB_RPS` | Max GitLab requests per second (throttle) | `10` |
+| `GITLAB_RPS` | Max GitLab requests per second (throttle) | `8` |
+| `GITLAB_PROJECTS` | Comma-separated project paths to sync, for example `company/app,company/lib` | all projects in the group |
+| `RETENTION_DAYS` | MRs merged/closed longer ago than this are pruned | `90` |
 | `REQUIRED_APPROVALS` | Approval target | `2` |
 | `JIRA_URL` | Jira browse base URL | none |
 | `SLACK_TOKEN` | Slack bot token | none *(phase 2)* |
@@ -197,19 +199,19 @@ Tables:
 - `projects` — `id`, `path_with_namespace`.
 - `merge_requests` — `id`, `iid`, `project_id`, `title`, `description`, `author_id`, `state`, `draft`, `created_at`, `merged_at`, `closed_at`, `updated_at`, `web_url`.
 - `approvals` — `id`, `mr_id`, `user_id`, `created_at`. Wipe-and-reinsert per MR on every re-fetch.
-- `discussions` — `id`, `mr_id`, `user_id`, `created_at`. One row per **discussion thread** (not per note). `user_id` is the author of the first non-system, non-author note; `created_at` is that note's time. Wipe-and-reinsert per MR.
-- `commits` — `id`, `mr_id`, `sha`, `message`, `committed_date`, `current`, `additions`, `deletions`. **Append-only by `(mr_id, sha)`**; never deleted. `current` is set on each sync for shas still present and unset for force-pushed-away shas. `additions`/`deletions` are fetched once per sha (immutable) and cached.
+- `discussions` — `id`, `mr_id`, `user_id`, `created_at`. One row per **discussion thread** (not per note). `user_id` is the author of the first non-system, non-author note; `created_at` is that note's time. Reviewers who only reply to an existing thread are not counted — a known simplification. Wipe-and-reinsert per MR.
+- `commits` — `id`, `mr_id`, `sha`, `message`, `committed_date`, `current`, `additions`, `deletions`. **Append-only by `(mr_id, sha)`**; never deleted. `current` is set on each sync for shas still present and unset for force-pushed-away shas. `additions`/`deletions` are fetched once per sha (immutable) and cached, so MR size always reflects the latest commit set without re-fetching unchanged stats.
 - `pipelines` — `id`, `mr_id`, `status`, `created_at`, `updated_at`. Wipe-and-reinsert per MR.
 - `jobs` — `id`, `pipeline_id`, `mr_id`, `status`. Wipe-and-reinsert per MR with its pipelines.
 - `sync_state` — `key`, `value`. Stores `last_sync`, `last_notify` (phase 2), and the sync lock.
 
-Wipe-and-reinsert handles unapprovals, deleted comments, and force-pushed pipelines/jobs automatically. Commits are the exception: they are append-only so rework can be detected from superseded commits (see Metric 3).
+Wipe-and-reinsert handles unapprovals, deleted comments, and force-pushed pipelines/jobs automatically. Commits are the exception: they are append-only so commit stats are fetched once per sha and the MR size metric can tell present from superseded commits. Retention pruning removes both when an MR falls out of retention (see §4.5).
 
 ### 4.4 GitLab API usage
 
 The app uses these endpoints:
 
-- `GET /groups/:id/projects?include_subgroups=true` — list projects.
+- `GET /groups/:id/projects?include_subgroups=true` — list projects (filtered to `GITLAB_PROJECTS` when set).
 - `GET /groups/:id/merge_requests?state=all&per_page=100` — list MRs.
 - `GET /projects/:id/merge_requests/:iid/approvals` — approvals with `approved_at` timestamps.
 - `GET /projects/:id/merge_requests/:iid/discussions` — discussion threads with notes and timestamps.
@@ -218,9 +220,9 @@ The app uses these endpoints:
 - `GET /projects/:id/merge_requests/:iid/commits` — commits.
 - `GET /projects/:id/repository/commits/:sha?stats=true` — per-commit `additions`/`deletions`, fetched once per sha.
 
-The group MR list returns MRs across the group. Approvals, discussions, pipelines, jobs, and commits need one or more calls per MR. The sync throttles requests to `GITLAB_RPS` (default 10/s). Approval timestamps depend on GitLab providing `approved_at`; if it is missing for a MR, that MR's approval-based metrics are empty.
+The group MR list returns MRs across the group (restricted to `GITLAB_PROJECTS` when set). Approvals, discussions, pipelines, jobs, and commits need one or more calls per MR. The sync throttles requests to `GITLAB_RPS` (default 8/s). Approval timestamps depend on GitLab providing `approved_at`; if it is missing for a MR, that MR's approval-based metrics are empty.
 
-Every list endpoint is fetched with `per_page=100`. If a response has more than one page (`x-total-pages > 1` or a `Link: rel="next"`), the app throws a runtime exception so the operator notices, rather than silently truncating. Sub-resources are not expected to exceed 100 items.
+Every list endpoint is fetched with `per_page=100` and all pages are followed via the `Link: rel="next"` header. Pagination is followed for the project list, the MR list, and every sub-resource; there is no page cap and no truncation.
 
 ### 4.5 Sync algorithm
 
@@ -228,24 +230,26 @@ There are three sync modes.
 
 Full backfill (`app:sync --full`), run once at deploy:
 
-1. Fetch all projects in the group.
+1. Fetch all projects in the group (filtered to `GITLAB_PROJECTS` when set).
 2. Fetch all MRs in the group, all states, all pages.
 3. For each MR, fetch approvals, discussions, pipelines, jobs, and commits; for each new commit sha, fetch commit stats.
 4. Store everything in SQLite (wipe-and-reinsert approvals/discussions/pipelines/jobs per MR; append commits).
 5. Set `last_sync` to now.
 
-Incremental (`app:sync`, also the on-load and 15-minute cron path):
+Incremental (`app:sync`, also the background on-load path):
 
 1. If `last_sync` is null, fetch only MRs updated in the last 1 hour (bounded so the first-ever load is fast). Otherwise fetch MRs with `updated_after = last_sync - 60s` (small overlap margin for clock skew).
 2. For each changed MR, re-fetch approvals, discussions, pipelines, jobs, and commits; fetch stats for any new commit sha.
-3. Upsert the MR. Wipe-and-reinsert approvals/discussions/pipelines/jobs for that MR. Append commits; set `current` on shas present, unset on shas that vanished.
-4. Set `last_sync` to now.
+3. Additionally, re-fetch pipelines and jobs for any MR whose latest cached pipeline is `running` or `pending`, even if the MR itself was not updated, so the pipeline indicator resolves within the sync cadence.
+4. Upsert the MR. Wipe-and-reinsert approvals/discussions/pipelines/jobs for that MR. Append commits; set `current` on shas present, unset on shas that vanished.
+5. Set `last_sync` to now.
 
 Open-MR refresh (`app:sync --refresh-open`, nightly):
 
 1. For every currently open MR, re-fetch approvals, discussions, pipelines, jobs, and commits.
 2. Wipe-and-reinsert approvals/discussions/pipelines/jobs; append commits.
 3. This catches approvals and discussions that did not bump the MR's `updated_at`. Merged/closed MRs are frozen and are skipped.
+4. Retention: delete MRs that are merged or closed and whose `merged_at`/`closed_at` is older than `RETENTION_DAYS` (default 90), together with their approvals, discussions, commits, pipelines, and jobs. MRs pruned this way were not open in the last 60 days, so they cannot affect the displayed windows.
 
 The sync sleeps between requests to stay under `GITLAB_RPS`. A sync lock (stored in `sync_state`) prevents two syncs from running at once; a holder is allowed a generous timeout, after which the lock is considered stale and can be taken over.
 
@@ -253,21 +257,21 @@ The sync sleeps between requests to stay under `GITLAB_RPS`. A sync lock (stored
 
 The web app checks `last_sync` on every request to `/api/data`.
 
-- If the cache is newer than 5 seconds, serve the cached data.
-- If the cache is older than 5 seconds, try to acquire the sync lock:
-  - If the lock is held by another process, serve the stale cache immediately (stale-while-revalidate).
-  - If acquired, run an incremental sync, release the lock, then serve fresh data.
+- If the cache is newer than 60 seconds, serve the cached data.
+- If the cache is older than 60 seconds, serve the stale cache immediately and spawn a detached `app:sync` process (guarded by the sync lock) so the next request is fresh. The page request never blocks on a sync.
 - If GitLab is unreachable, serve the stale cache.
 
-The first load ever (before `app:sync --full` has run) uses the bounded 1-hour incremental path, so it does not block on full history. After backfill, the 15-minute cron keeps `last_sync` fresh, so on-load deltas are small. Concurrent users share one cache window and one sync.
+This is stale-while-revalidate: the browser always gets an immediate answer, and a background sync refreshes the cache at most once per minute. Concurrent users share one sync — the sync lock serializes the background workers, and the web process never acquires the lock itself.
+
+The first load before `app:sync --full` has run uses the bounded 1-hour incremental path, so it does not block on full history.
 
 SQLite runs in WAL mode with a `busy_timeout` so the surviving writer and readers do not error under concurrent access.
 
 ### 4.7 Slack notification (phase 2)
 
-The `app:notify-slack` command runs every 15 minutes.
+Slack notifications are a flag on the sync command: `app:sync --notify-slack`. The cron runs it every 15 minutes (phase 2). Without the flag the command only syncs; with it the command syncs and then notifies, so one command covers both modes.
 
-1. Run an incremental sync.
+1. Run an incremental sync (the same steps as `app:sync`).
 2. Find MRs with `created_at` after `last_notify`. Bundle them into one message.
 3. For each new MR, count approvals and compute `X = max(0, REQUIRED_APPROVALS - approvals)`.
 4. Find MRs that turned stale (open and crossed the 60-day threshold) since `last_notify`. For each, prepare a nudge naming the author.
@@ -275,6 +279,8 @@ The `app:notify-slack` command runs every 15 minutes.
 6. Set `last_notify` to now.
 
 On first enablement, initialize `last_notify = now` so only MRs created after Slack was enabled are notified.
+
+If the incremental sync fails, the notifications are still posted from the cached data, and the message states that the sync failed and why.
 
 New-MR message format:
 
@@ -295,7 +301,7 @@ The command uses the Slack Web API `chat.postMessage` with the bot token.
 
 ### 4.8 API contract
 
-`GET /api/data` returns JSON. The backend sends **raw events only** (plus `jira_ticket`, which is a cheap backend regex). The frontend computes every per-MR and per-person value from the raw arrays, joined by `mr_id`.
+`GET /api/data?bucket=week|day|hour` returns JSON. The backend computes every per-MR and per-person value from the cache; the frontend renders them. `bucket` selects the chart granularity (default `day`) — the frontend re-requests with a different `bucket` when the user zooms. Duration/size metrics carry both a `mean` and a `median` series; the frontend picks which to draw from the mean/median cookie.
 
 ```json
 {
@@ -305,7 +311,9 @@ The command uses the Slack Web API `chat.postMessage` with the bot token.
     "window_days": 60,
     "coverage_window_days": 30,
     "generated_at": "2026-08-11T12:00:00Z",
-    "cache_age_seconds": 3
+    "cache_age_seconds": 3,
+    "last_sync_at": "2026-08-11T11:45:00Z",
+    "next_sync_at": "2026-08-11T12:00:00Z"
   },
   "users": [
     {"id": 1, "name": "Jane Doe", "username": "jdoe", "avatar_url": "..."}
@@ -321,48 +329,57 @@ The command uses the Slack Web API `chat.postMessage` with the bot token.
       "author": {"id": 1, "name": "Jane Doe", "avatar_url": "..."},
       "state": "opened",
       "draft": false,
+      "stale": false,
       "created_at": "2026-08-08T09:00:00Z",
       "merged_at": null,
       "closed_at": null,
-      "web_url": "https://gitlab.company.io/company/app/-/merge_requests/1240"
+      "web_url": "https://gitlab.company.io/company/app/-/merge_requests/1240",
+      "age_seconds": 345600,
+      "time_to_first_approval_seconds": 86400,
+      "commit_count": 2,
+      "pipeline": {"status": "running", "indicator": "spinner"}
     }
   ],
-  "approvals": [
-    {"mr_id": 1240, "user_id": 2, "created_at": "2026-08-09T09:00:00Z"}
-  ],
-  "discussions": [
-    {"mr_id": 1240, "user_id": 3, "created_at": "2026-08-08T10:00:00Z"}
-  ],
-  "commits": [
-    {"mr_id": 1240, "sha": "abc123", "message": "Add feature X", "committed_date": "2026-08-08T08:00:00Z", "current": true, "additions": 120, "deletions": 30}
-  ],
-  "pipelines": [
-    {"mr_id": 1240, "id": 99, "status": "running", "created_at": "2026-08-08T09:05:00Z", "updated_at": "2026-08-08T09:20:00Z"}
-  ],
-  "jobs": [
-    {"mr_id": 1240, "pipeline_id": 99, "id": 501, "status": "failed"}
-  ]
+  "metrics": {
+    "time_to_first_approve": {
+      "bucket": "day",
+      "unit": "seconds",
+      "persons": {
+        "1": {"buckets": ["2026-08-04", "2026-08-05"], "mean": [3600, 4100], "median": [3400, 4000]}
+      }
+    },
+    "coverage": {
+      "bucket": "day",
+      "unit": "percent",
+      "persons": {
+        "1": {"buckets": ["2026-08-04", "2026-08-05"], "values": [25, 33]}
+      }
+    }
+  }
 }
 ```
 
-The frontend computes all per-person series from `mrs`, `approvals`, `discussions`, `commits`, `pipelines`, and `jobs`. The frontend re-buckets on zoom. The backend sends raw events, not pre-aggregated series.
+The `mrs` array holds the rows the MR list renders — the last 5 merged MRs, the open and closed MRs from the last 60 days, and stale open MRs (with `stale: true`) that collapse into the stale link. The frontend sorts and renders; all values arrive pre-computed. `pipeline.indicator` is one of `spinner`, `check`, `fail`, `neutral`, or `none` (see Metric 12).
+
+`metrics` holds one object per metric cell (§4.9), keyed by user id. Non-duration metrics have `values`; duration/size metrics have both `mean` and `median`.
 
 ### 4.9 Metrics
 
-Each metric cell plots a time series (one line per person) over the `window_days` window, bucketed by zoom (weekly/daily/hourly). The bucketing dimension differs per metric:
+Each metric cell plots a time series (one line per person) over the `window_days` window, bucketed by zoom (weekly/daily/hourly). All metric values are computed by the backend from the cached tables; the frontend renders them. Zoom re-requests the API with a different `bucket`.
+
+The bucketing dimension differs per metric:
 
 | Metric | Bucket by |
 |--------|-----------|
 | 1 Time to first approve | activity date (approval) |
-| 3 First try % | `merged_at` |
-| 4 Time to review | activity date (first approval or discussion) |
-| 5 Coverage % | rolling 30-day window ending at the plotted day |
-| 6 Stale MR count | the plotted day (snapshot reconstructed from timestamps) |
-| 7 Time to merge | `merged_at` |
-| 9 MR size | `created_at` |
-| 10 Approvals given | activity date (approval) |
-| 11 First response time | activity date (first discussion) |
-| 12 Merged MR count | `merged_at` (snapshot of last 30 days) |
+| 2 Coverage % | rolling 30-day window ending at the plotted day |
+| 3 Time to review | activity date (first approval or discussion) |
+| 4 Stale MR count | the plotted day (snapshot reconstructed from timestamps) |
+| 5 Time to merge | `merged_at` |
+| 6 MR size | `created_at` |
+| 7 Approvals given | activity date (approval) |
+| 8 First response time | activity date (first discussion) |
+| 9 Merged MR count | `merged_at` (snapshot of last 30 days) |
 
 Time series are reconstructed from event timestamps (`created_at`, `merged_at`, `closed_at`, approval/discussion times), not from stored snapshots. An MR was open at day D if `created_at <= D` and (`merged_at` is null or `merged_at > D`) and (`closed_at` is null or `closed_at > D`).
 
@@ -378,51 +395,50 @@ Time series are reconstructed from event timestamps (`created_at`, `merged_at`, 
 
 Format: `Xd HH:MM:SS`, for example `12d 23:59:59`.
 
-#### Metric 3 — First try % (per person, author-centric)
-
-For each MR authored by the person that is no longer open:
-
-- Score 1 if the MR reached `REQUIRED_APPROVALS` and was merged with **no rework**: no commit identity has `earliest_committed_date > first_approval.created_at`. A commit identity is its message within the MR; `earliest_committed_date` is the minimum `committed_date` across all shas seen for that message, so rebases that preserve the message do not count as rework.
-- Score 0 if the MR reached the threshold but a new-message commit appeared after the first approval (rework), or if it was closed/merged without reaching the threshold.
-- Still open → excluded.
-
-The person's score is the average of their MR scores. Bucket by `merged_at`. `committed_date` is a proxy for push time (GitLab's polling API does not expose exact push timestamps); sub-15-minute ordering is approximate.
-
-#### Metric 4 — Time to review (per person, reviewer-centric)
+#### Metric 3 — Time to review (per person, reviewer-centric)
 
 For each MR where the person approved or left a discussion thread: `first activity time - mr.created_at`. First activity is the earlier of the person's first approval and their first discussion thread. Average across their reviewed MRs. Bucket by the activity date. Format: days + hours + minutes.
 
-#### Metric 5 — Coverage % (per person)
+#### Metric 4 — Coverage % (per person)
 
 For a rolling 30-day window ending at each plotted day: `MRs opened in the window that the person reviewed / MRs opened in the window`. A review is an approval or a discussion thread, at any time (even after the window closes). If no MRs were opened in the window, the value is empty.
 
-#### Metric 6 — Stale MR count (per person, author-centric, snapshot time series)
+#### Metric 5 — Stale MR count (per person, author-centric, snapshot time series)
 
 For each plotted day: count of the person's MRs that were open on that day and older than 60 days (`day - created_at > 60 days`, and the MR was open on that day).
 
-#### Metric 7 — Time to merge (per person, author-centric)
+#### Metric 6 — Time to merge (per person, author-centric)
 
 For each merged MR authored by the person: `merged_at - created_at`. Average. Bucket by `merged_at`.
 
-#### Metric 8 — Mean/median toggle (control, not a metric cell)
+#### Metric 7 — Mean/median toggle (control, not a metric cell)
 
-A `⇄` switch in the header of each duration/size cell (metrics 1, 4, 7, 9, 11). When on, the cell shows a dashed median line beside the mean line. The switch is one shared state across all such cells, and the value lives in a cookie.
+A `⇄` switch in the header of each duration/size cell (metrics 1, 3, 6, 8, 10). The backend sends both a `mean` and a `median` line for these metrics; when the switch is on, the frontend draws the median line instead of the mean. The switch is one shared state across all such cells, and the value lives in a cookie (frontend-only, no re-request).
 
-#### Metric 9 — MR size (per person, author-centric)
+#### Metric 8 — MR size (per person, author-centric)
 
 For each MR authored by the person: sum of `additions + deletions` over its **current** commits (last-fetched size, reflecting added/changed commits). Averaged per person. Bucket by `created_at`.
 
-#### Metric 10 — Approvals given (per person)
+#### Metric 9 — Approvals given (per person)
 
 Count of approvals given by the person, over the displayed window. Bucket by the approval date.
 
-#### Metric 11 — First response time (per person, reviewer-centric)
+#### Metric 10 — First response time (per person, reviewer-centric)
 
 For each MR where the person left a discussion thread: `first discussion time - mr.created_at`. Average. Bucket by the discussion date.
 
-#### Metric 12 — Merged MR count (per person, author-centric, snapshot)
+#### Metric 11 — Merged MR count (per person, author-centric, snapshot)
 
 Count of MRs authored by the person that were merged within the last 30 days. Snapshot value over the `merged_at` axis.
+
+#### Metric 12 — Pipeline indicator (per MR, shown in the MR row)
+
+Computed from the latest pipeline (the one with the highest `id`) and its jobs:
+
+- Spinner while the latest pipeline runs. The spinner is red if any finished job has status `failed`, orange if any finished job has status `warning`, otherwise neutral.
+- Green check when the latest pipeline finished with `success`.
+- Red indicator when the latest pipeline finished with `failed`.
+- Neutral indicator for `canceled`/`skipped`/`manual`. No indicator if there is no pipeline.
 
 ### 4.10 Metric cell tooltip
 
@@ -446,17 +462,13 @@ Lower is better.
 
 The frontend is one HTML page with vanilla JavaScript. It uses uPlot for charts.
 
-The page loads `/api/data` once. The frontend computes all series from the raw events. It re-buckets on zoom:
+The page loads `/api/data` and re-fetches it every 60 seconds, so the dashboard stays fresh without a reload. The backend computes all series; the frontend renders them.
 
-- Zoomed out: weekly buckets.
-- Zoomed in: daily buckets.
-- Fully zoomed: hourly buckets.
+Zoom is drag-to-select a range on the x-axis; double-click resets to full. On zoom the frontend re-requests `/api/data?bucket=week|day|hour` — zoomed out: weekly buckets, zoomed in: daily, fully zoomed: hourly. Bucketing follows the per-metric dimension in §4.9.
 
-Zoom is drag-to-select a range on the x-axis; double-click resets to full. Bucketing follows the per-metric dimension in §4.9.
+Each cell draws one line per person from the `metrics` payload. The line ends at the person's avatar. uPlot custom point rendering draws the avatar image at the last point. Each cell header shows a `(?)` tooltip; duration/size cells also show the shared `⇄` mean/median switch. The switch is cookie-persisted and only picks which of the two backend-computed series (`mean` or `median`) is drawn — no re-request.
 
-Each cell draws one line per person. The line ends at the person's avatar. uPlot custom point rendering draws the avatar image at the last point. Each cell header shows a `(?)` tooltip; duration/size cells also show the shared `⇄` mean/median switch (cookie-persisted).
-
-The MR list renders from the `mrs` array. The list shows open and closed MRs from the last 60 days, newest open MR at the bottom. The last 5 merged MRs pin to the top, grayed. Closed MRs (within 60 days) appear grayed in the body with a "closed" badge. Drafts show a "draft" badge. MRs opened more than 60 days ago collapse into one link:
+The MR list renders the `mrs` array. The list shows open and closed MRs from the last 60 days, newest open MR at the bottom. The last 5 merged MRs pin to the top, grayed. Closed MRs (within 60 days) appear grayed in the body with a "closed" badge. Drafts show a "draft" badge. MRs with `stale: true` collapse into one link:
 
 ```
 5 stale Merge Requests belonging to Author A (3), Author B (2)
@@ -472,18 +484,15 @@ The commits link opens one new tab per current commit diff. The link format:
 
 Opening multiple tabs requires popup permission for the dashboard URL, granted once by the user.
 
-The pipeline indicator shows:
+The pipeline indicator comes from `mrs[].pipeline.indicator` (see Metric 12).
 
-- Spinner while the pipeline runs. The spinner is red if any finished job has status `failed`, orange if any finished job has status `warning`, otherwise neutral.
-- Green checkmark when the latest pipeline finished with `success`.
-- Red indicator when the latest pipeline finished with `failed`.
-- Neutral indicator for `canceled`/`skipped`/`manual`. No indicator if there is no pipeline.
+The Jira ticket column shows `mrs[].jira_ticket`, extracted by the backend with the regex `^([A-Z][A-Z0-9]+-\d+)`. The ticket links to `{JIRA_URL}{ticket}`.
 
-The latest pipeline is the one with the highest `id` for the MR.
+The header shows the sync status from `meta`: `last_sync_at` and `next_sync_at`, formatted in the browser's local time.
 
-The Jira ticket column shows the ticket extracted from the title by the backend. The regex is `^([A-Z][A-Z0-9]+-\d+)`. The ticket links to `{JIRA_URL}{ticket}`.
+The backend computes all thresholds and day boundaries in UTC; the frontend renders timestamps in the browser's local time.
 
-All thresholds and bucketing use the browser's local time. The backend stores timestamps in UTC; the frontend converts for display and for "last 60 days" / "stale 60 days" calculations.
+All content that originates from GitLab (MR titles, descriptions, commit messages, author names) is rendered as text via `textContent`, never `innerHTML`, to avoid stored XSS from MR content.
 
 ### 4.12 Docker
 
@@ -513,17 +522,17 @@ Cron lines (phase 1):
 0 3 * * * php /app/bin/console app:sync --refresh-open
 ```
 
-Phase 2 adds:
+Phase 2 replaces the 15-minute line with:
 
 ```
-*/15 * * * * php /app/bin/console app:notify-slack
+*/15 * * * * php /app/bin/console app:sync --notify-slack
 ```
 
 ### 4.13 GitLab CI
 
-The pipeline has one stage: build.
+The pipeline has two stages: test and build.
 
-The build uses kaniko. Kaniko builds the image without a privileged runner. The pipeline logs in to the GitLab Container Registry. The pipeline pushes the image to `$CI_REGISTRY_IMAGE`.
+The test stage runs PHPUnit, PHPStan (level 10), and phpcs on the backend, and the frontend smoke test. It creates `var/cache` first, because phpcs writes its cache file (`var/cache/phpcs-cache`) there and does not create missing parent directories. The build stage uses kaniko. Kaniko builds the image without a privileged runner. The pipeline logs in to the GitLab Container Registry. The pipeline pushes the image to `$CI_REGISTRY_IMAGE`.
 
 Deployment is manual. The operator runs `docker compose up` on the target host. The same image runs locally and in production.
 
@@ -547,7 +556,7 @@ Then run the one-time backfill:
 docker exec <container> php /app/bin/console app:sync --full
 ```
 
-Phase 2 adds `SLACK_TOKEN`, `SLACK_CHANNEL`, and `APP_URL`. The personal access token needs the `read_api` scope.
+Phase 2 adds `SLACK_TOKEN`, `SLACK_CHANNEL`, and `APP_URL`. The personal access token needs the `read_api` scope. `GITLAB_PROJECTS` is optional; omit it, the sync covers the whole group.
 
 ## 5. Testing Decisions
 
@@ -556,17 +565,22 @@ The tests cover external behavior, not implementation details.
 Backend tests (PHPUnit):
 
 - Metric computation tests. Each metric is a pure function. Tests feed MR, approval, discussion, commit, pipeline, and job fixtures and assert the result.
-- First-try rework detection tests, including the rebase-preserves-message case.
-- Pipeline indicator tests, including the running-with-failed-job and running-with-warning cases.
+- Pipeline indicator tests; including the running-with-failed-job and running-with-warning cases.
 - Jira extraction test. Tests the regex on sample titles.
-- Sync logic tests. A mock GitLab client returns fixtures. Tests assert the SQLite state after sync, including wipe-and-reinsert and append-only commit behavior.
-- Pagination guard test. A fixture with `x-total-pages > 1` triggers the exception.
-- API contract test. Tests that `/api/data` returns the documented raw shape.
+- Sync logic tests. A mock GitLab client returns fixtures. Tests assert the SQLite state after sync, including wipe-and-reinsert, append-only commits, and the running-pipeline refresh.
+- Pagination test. A fixture with multiple pages is followed to completion and all rows are stored.
+- Retention test. MRs merged/closed longer than `RETENTION_DAYS` are pruned together with their sub-resources.
+- API contract test. Tests that `/api/data` returns the documented computed shape, including the `mean`/`median` pair on duration metrics and `last_sync_at`/`next_sync_at`.
 
 Frontend tests:
 
-- Bucket and aggregation functions (Vitest). Tests feed raw events and assert the series.
 - A smoke test (Playwright). The page loads and renders without console errors.
+- A unit test for the mean/median toggle. The cookie switches which of the two backend series is drawn.
+
+Static analysis and code style:
+
+- PHPStan at level 10.
+- phpcs with the team's `phpcs.xml`, based on `slevomat/coding-standard` (installed via composer). The file is committed to the repository before implementation begins.
 
 Prior art: the metric functions are pure and deterministic. This makes the tests simple and fast.
 
@@ -582,17 +596,16 @@ Prior art: the metric functions are pure and deterministic. This makes the tests
 - Jira API integration. The app only links to Jira, it does not read Jira data.
 - Slack notifications for approval milestones. The app notifies on new MRs and on MRs turning stale (phase 2).
 - Per-project approval rules. The app uses the single `REQUIRED_APPROVALS` env var; real per-project GitLab rules are ignored (known simplification).
-- Exact push timestamps for first-try detection. The app uses `committed_date` as a proxy; webhooks/events are not in scope.
 
 ## 7. Further Notes
 
-- The app stores timestamps in UTC. The frontend displays them in the browser local time and buckets/calculates thresholds in local time.
-- The 5-second cache window means concurrent users share one sync; a sync in progress serves stale cache to new requests.
-- The mean/median switch value lives in a cookie and is shared across all duration/size cells.
-- The initial backfill (`app:sync --full`) may take several minutes. The sync throttles to `GITLAB_RPS`. The first page load before backfill is bounded to the last 1 hour.
-- Approvals/discussions/pipelines/jobs are wipe-and-reinserted per MR on re-fetch. Commits are append-only by sha, with a `current` flag, so rework is detectable.
-- The nightly `app:sync --refresh-open` guarantees approvals and discussions on open MRs are never more than ~24 hours stale.
-- The stale threshold is 60 days. The MR list window is 60 days. The coverage window is 30 days. The merged-count window is 30 days. All are constants in the code.
+- The app stores timestamps in UTC. The backend computes all thresholds and bucketing in UTC; the frontend renders in the browser's local time.
+- The on-load refresh is asynchronous: the page request never blocks on a sync, and a background sync serves stale data in the interim.
+- The mean/median switch value lives in a cookie and is shared between all duration/size cells. The backend returns both series; the switch only picks which is drawn.
+- The initial backfill (`app:sync --full`) may take several minutes to an hour for large groups. The sync throttles to `GITLAB_RPS`. The first page load before backfill is bounded to the last 1 hour.
+- Approvals/discussions/pipelines/jobs are wipe-and-reinserted per MR on re-fetch. Commits are append-only by sha, with a `current` flag, so MR size always reflects the latest commit set.
+- The nightly `app:sync --refresh-open` guarantees approvals and discussions on open MRs are never more than ~24 hours stale, and it prunes MRs that fall outside `RETENTION_DAYS`.
+- The stale threshold is 60 days. The MR list window is 60 days. The coverage window is 30 days. The merged-count window is 30 days. Retention is 90 days. All are constants in the code.
 - The SQLite database lives on a mounted volume.
-- Slack notifications (new-MR bundle and stale nudges, with a dashboard link) are phase 2.
+- Slack notifications (new-MR bundle and stale nudges, with a dashboard link) are phase 2 and run as `app:sync --notify-slack`.
 - The dashboard shows data only. It does not rank or highlight winners or losers.
