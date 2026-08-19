@@ -512,12 +512,25 @@ body {
 .cell-title {
     font-weight: 600;
     color: var(--text);
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.cell-value {
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .tip-icon {
     color: var(--neutral);
     cursor: help;
     position: relative;
+    flex: 0 0 auto;
 }
 
 .tip-icon:hover::after {

@@ -263,6 +263,32 @@ test('hovering a chart shows a toolbar with each avatar and its value at that ti
     expect(await tip.evaluate((el) => el.hidden)).toBe(true);
 });
 
+test('cell headers show the latest team-level value and update with the mean/median toggle', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+
+    // Coverage % is a "values" kind metric; its header shows the team-level
+    // current value next to the title.
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const coverageValue = coverage.locator('.cell-value');
+    await expect(coverageValue).toBeVisible();
+    expect(await coverageValue.textContent()).toMatch(/^·\s*[\d.]+%$/);
+
+    // Time to review is a "meanmedian" kind metric; toggling mean/median
+    // changes the displayed team value (or at minimum re-renders it) since
+    // the aggregate is computed from the selected mode's per-person series.
+    const review = page.locator('.cell', { hasText: 'Time to review' }).first();
+    const reviewValue = review.locator('.cell-value');
+    await expect(reviewValue).toBeVisible();
+    const before = await reviewValue.textContent();
+
+    await review.locator('.mm-toggle').click();
+    await page.waitForTimeout(100);
+    const afterReviewValue = page.locator('.cell', { hasText: 'Time to review' }).first().locator('.cell-value');
+    await expect(afterReviewValue).toBeVisible();
+    expect(await afterReviewValue.textContent()).toMatch(/^·\s*\S/);
+});
+
 test('a poll with unchanged data skips the rebuild', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.cell canvas');

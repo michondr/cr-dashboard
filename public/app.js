@@ -619,11 +619,46 @@ function renderHeader(data) {
     node.textContent = text;
 }
 
-function buildCellHeader(meta) {
+function median(nums) {
+    const sorted = [...nums].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+
+    return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// The latest team-level value for a metric: for the newest bucket that has
+// any data, the mean (mean-mode) or median (median-mode) across persons'
+// values at that bucket.
+function latestTeamValue(metric, mode) {
+    const persons = Object.entries((metric && metric.persons) || {});
+    if (persons.length === 0) {
+        return null;
+    }
+    const buckets = persons[0][1].buckets;
+    for (let i = buckets.length - 1; i >= 0; i--) {
+        const values = persons
+            .map(([, series]) => pickSeries(series, mode)[i])
+            .filter((v) => v != null);
+        if (values.length > 0) {
+            return mode === 'median' ? median(values) : values.reduce((a, b) => a + b, 0) / values.length;
+        }
+    }
+
+    return null;
+}
+
+function buildCellHeader(meta, metric) {
     const header = el('div', 'cell-header');
     const title = el('span', 'cell-title');
     title.textContent = meta.title;
     header.appendChild(title);
+
+    const teamValue = latestTeamValue(metric, getMode());
+    if (teamValue != null) {
+        const value = el('span', 'cell-value');
+        value.textContent = `· ${formatMetricValue(meta.unit, teamValue)}`;
+        header.appendChild(value);
+    }
 
     const tip = el('span', 'tip-icon');
     tip.textContent = '(?)';
@@ -871,7 +906,7 @@ function renderStats(data) {
 
     for (const [key, meta] of Object.entries(METRICS)) {
         const cell = el('section', 'cell');
-        cell.appendChild(buildCellHeader(meta));
+        cell.appendChild(buildCellHeader(meta, data.metrics[key]));
         const wrap = el('div', 'chart-wrap');
         cell.appendChild(wrap);
         panel.appendChild(cell);
