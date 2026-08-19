@@ -197,6 +197,66 @@ test('cycle_started marks queued rows and cycle_done clears any leftovers', asyn
     await expect(queuedRow).not.toHaveClass(/refresh-queued/);
 });
 
+test('a changed event for an unknown MR splices its row in live, sorted, with no list rebuild', async ({ page, request }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    await expect(page.locator('.mr-row[data-mr-id="210"]')).toHaveCount(0);
+
+    // Mark a body row so we can confirm the list was patched, not rebuilt.
+    await page.locator('.mr-row[data-mr-id="204"]').evaluate((el) => {
+        el.dataset.testMarker = 'untouched';
+    });
+
+    // created_at (2026-08-18T20:12:05) is later than every existing body MR
+    // (the latest, 204 and 209, sit at 2026-08-18T20:12:04), so the new row
+    // must land at the very end of the body list.
+    await request.post('/__test/mr', {
+        data: {
+            id: 210,
+            iid: 210,
+            project: { id: 1, path_with_namespace: 'group/app', name: 'App', avatar_url: null },
+            title: 'REC-210 - Brand new MR',
+            jira_ticket: 'REC-210',
+            description: 'Spliced in live.',
+            author: { id: 3, name: 'Ann Lee', username: 'alee', avatar_url: null },
+            state: 'opened',
+            draft: false,
+            stale: false,
+            created_at: '2026-08-18T20:12:05+00:00',
+            merged_at: null,
+            closed_at: null,
+            web_url: 'https://gitlab.example.test/group/app/-/merge_requests/210',
+            age_seconds: 100,
+            time_to_first_approval_seconds: null,
+            commit_count: 1,
+            commit_diff_urls: [],
+            pipeline: { status: 'success', indicator: 'check', tint: null },
+            approvers: [],
+            needs_rebase: false,
+            unresolved_discussions: 0,
+            approved: false,
+            ready: false,
+        },
+    });
+
+    await page.waitForTimeout(300);
+    await request.post('/__test/sse', { data: { type: 'changed', mr_id: 210 } });
+
+    const newRow = page.locator('.mr-row[data-mr-id="210"]');
+    await expect(newRow).toHaveCount(1);
+    await expect(newRow).toContainText('Brand new MR');
+
+    // Sorted position: it has the latest created_at, so it lands last.
+    const idsInOrder = await page.locator('#mr-list > .mr-row').evaluateAll(
+        (rows) => rows.map((row) => row.dataset.mrId)
+    );
+    expect(idsInOrder[idsInOrder.length - 1]).toBe('210');
+
+    // No full rebuild: the marker on row 204 survived.
+    expect(await page.locator('.mr-row[data-mr-id="204"]').getAttribute('data-test-marker')).toBe('untouched');
+});
+
 test('the topbar shows a connected-users indicator with a rate-limit tooltip', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');

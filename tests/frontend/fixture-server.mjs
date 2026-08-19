@@ -68,6 +68,25 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // Test-only helper: POST an MR object here to add it to (or replace it
+    // in) the fixture's /api/data response, so a `changed` SSE event fired
+    // afterwards has something new to refetch (see follow-up F2's splice
+    // test).
+    if (url.pathname === '/__test/mr' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+            body += chunk;
+        });
+        req.on('end', () => {
+            const mr = JSON.parse(body);
+            fixture.mrs = [...fixture.mrs.filter((existing) => existing.id !== mr.id), mr];
+            res.writeHead(204);
+            res.end();
+        });
+
+        return;
+    }
+
     // Test-only helper: POST a JSON payload here and it is immediately
     // forwarded as a Mercure SSE event to any connected EventSource (or
     // queued for the next one to connect).

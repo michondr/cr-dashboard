@@ -252,8 +252,8 @@ async function pollPresence() {
 
 // Refetches the dataset and swaps just the one changed row in place (no full
 // list rebuild, no scroll-position loss). A row that disappeared (merged,
-// closed) is removed; a brand-new row not yet in the DOM is picked up on the
-// next full reload rather than spliced in mid-list.
+// closed) is removed; a brand-new row not yet in the DOM is spliced into its
+// sorted position live (follow-up F2).
 async function refetchAndPatchRow(mrId) {
     try {
         const params = new URLSearchParams({ bucket: state.bucket });
@@ -278,9 +278,10 @@ async function refetchAndPatchRow(mrId) {
             return;
         }
 
-        const freshRow = renderMrRow(mr, mr.stale === true);
         if (existingRow) {
-            existingRow.replaceWith(freshRow);
+            existingRow.replaceWith(renderMrRow(mr, mr.stale === true));
+        } else {
+            spliceNewMrRow(mr);
         }
     } catch {
         // Offline or the API is unreachable; the row keeps its last-known state.
@@ -667,6 +668,8 @@ function titleWithoutTicket(mr) {
 function renderMrRow(mr, dimmed) {
     const row = el('div', 'mr-row');
     row.dataset.mrId = String(mr.id);
+    row.dataset.createdAt = mr.created_at || '';
+    row.dataset.authorName = mr.author.name || '';
     if (dimmed) {
         row.classList.add('dim');
     }
@@ -848,7 +851,7 @@ function renderMrList(data) {
     if (stale.length > 0) {
         const link = renderStaleLink(stale);
         container.appendChild(link);
-        const wrapper = el('div');
+        const wrapper = el('div', 'stale-wrapper');
         wrapper.hidden = true;
         for (const mr of stale) {
             wrapper.appendChild(renderMrRow(mr, true));
@@ -873,6 +876,113 @@ function renderMrSection(label, mrs) {
         section.appendChild(renderMrRow(mr, mr.stale === true));
     }
     return section;
+}
+
+// Follow-up F2: inserts a brand-new MR's row at the position the next full
+// reload would put it in, instead of waiting for that reload. Rows sort by
+// created_at ascending within their parent (matching renderMrList/
+// renderMrSection), so a freshly-built row is placed just before the first
+// sibling row whose created_at is greater.
+function insertRowSorted(parent, row, createdAt) {
+    const rows = parent.querySelectorAll(':scope > .mr-row');
+    let before = null;
+    for (const candidate of rows) {
+        if ((candidate.dataset.createdAt || '') > createdAt) {
+            before = candidate;
+            break;
+        }
+    }
+    if (before) {
+        parent.insertBefore(row, before);
+    } else {
+        parent.appendChild(row);
+    }
+}
+
+// "My view" sections ("Authored by me" / "Awaiting my review"): find the
+// matching section by its heading text and insert the row into it, updating
+// the "(count)" suffix. Returns false if the section is not in the DOM.
+function insertIntoSection(container, label, mr, row) {
+    for (const section of container.querySelectorAll('.mr-section')) {
+        const heading = section.querySelector('.mr-section-heading');
+        if (!heading || !heading.textContent.startsWith(`${label} (`)) {
+            continue;
+        }
+        insertRowSorted(section, row, mr.created_at || '');
+        heading.textContent = `${label} (${section.querySelectorAll('.mr-row').length})`;
+
+        return true;
+    }
+
+    return false;
+}
+
+// The stale-MR wrapper (hidden until the "N stale Merge Requests..." link is
+// clicked): creates the link+wrapper pair if this is the first stale row
+// spliced in, otherwise inserts sorted and refreshes the link's byline.
+function insertIntoStaleWrapper(container, mr, row) {
+    let wrapper = container.querySelector('.stale-wrapper');
+    let link;
+    if (wrapper) {
+        link = wrapper.previousElementSibling;
+    } else {
+        link = renderStaleLink([mr]);
+        wrapper = el('div', 'stale-wrapper');
+        wrapper.hidden = true;
+        link.addEventListener('click', () => {
+            wrapper.hidden = !wrapper.hidden;
+        });
+        container.insertBefore(wrapper, container.firstChild);
+        container.insertBefore(link, wrapper);
+    }
+
+    insertRowSorted(wrapper, row, mr.created_at || '');
+    if (link) {
+        updateStaleLinkText(link, wrapper);
+    }
+}
+
+function updateStaleLinkText(link, wrapper) {
+    const rows = wrapper.querySelectorAll('.mr-row');
+    const byAuthor = new Map();
+    for (const row of rows) {
+        const name = row.dataset.authorName || '';
+        byAuthor.set(name, (byAuthor.get(name) || 0) + 1);
+    }
+    const parts = [];
+    for (const [name, count] of byAuthor) {
+        parts.push(`${name} (${count})`);
+    }
+    link.textContent = `${rows.length} stale Merge Requests belonging to ${parts.join(', ')}`;
+}
+
+// Builds a row for `mr` (which has no existing row in the DOM) and inserts it
+// at the position a full reload would render it in, respecting the current
+// view: the two "My view" sections, or the stale-group/body split.
+function spliceNewMrRow(mr) {
+    const container = document.getElementById('mr-list');
+    if (!container) {
+        return;
+    }
+    const row = renderMrRow(mr, mr.stale === true);
+
+    if (state.userId) {
+        if (String(mr.author.id) === state.userId) {
+            insertIntoSection(container, 'Authored by me', mr, row);
+        } else if (!mr.stale) {
+            insertIntoSection(container, 'Awaiting my review', mr, row);
+        }
+
+        return;
+    }
+
+    if (mr.stale) {
+        insertIntoStaleWrapper(container, mr, row);
+
+        return;
+    }
+
+    insertRowSorted(container, row, mr.created_at || '');
 }
 
 function renderHeader(data) {
