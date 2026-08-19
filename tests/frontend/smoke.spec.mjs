@@ -150,6 +150,19 @@ test('the header shows a refresh-interval segmented control with a live countdow
     expect(request.method()).toBe('POST');
 });
 
+test('the sync-now button triggers an immediate POST /api/refresh', async ({ page }) => {
+    await page.goto('/');
+    const syncNow = page.locator('#refresh-now');
+    await expect(syncNow).toHaveText("Sync now, I can't wait");
+    await expect(syncNow).toBeEnabled();
+
+    const [request] = await Promise.all([
+        page.waitForRequest((req) => req.url().includes('/api/refresh') && req.method() === 'POST'),
+        syncNow.click(),
+    ]);
+    expect(request.method()).toBe('POST');
+});
+
 test('SSE refresh events fill a row\'s progress and clear it again on completion', async ({ page, request }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');

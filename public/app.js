@@ -343,12 +343,34 @@ async function triggerRefresh() {
             params.set('user', state.userId);
         }
         const query = params.toString();
-        await fetch(`/api/refresh${query ? `?${query}` : ''}`, { method: 'POST' });
+        const response = await fetch(`/api/refresh${query ? `?${query}` : ''}`, { method: 'POST' });
+        if (response.ok) {
+            const body = await response.json();
+            // A declined trigger during the post-cycle cooldown: surface the
+            // wait on the sync-now button instead of failing silently.
+            if (body.accepted === false && body.cooldown_remaining > 0) {
+                flashSyncNow(`cooldown ${Math.ceil(body.cooldown_remaining)}s`);
+            }
+        }
     } catch {
         // Offline or the API is unreachable; the next tick retries.
     }
     resetRefreshDeadline();
     pollRefreshStatus();
+}
+
+const SYNC_NOW_LABEL = "Sync now, I can't wait";
+
+// Temporarily swaps the sync-now button label (e.g. for cooldown feedback).
+function flashSyncNow(text) {
+    const button = document.getElementById('refresh-now');
+    if (!button) {
+        return;
+    }
+    button.textContent = text;
+    setTimeout(() => {
+        button.textContent = SYNC_NOW_LABEL;
+    }, 2000);
 }
 
 async function pollRefreshStatus() {
@@ -379,6 +401,11 @@ function tickRefreshCountdown() {
     }
 
     button.classList.toggle('is-refreshing', state.refreshCycleActive);
+
+    const syncNow = document.getElementById('refresh-now');
+    if (syncNow) {
+        syncNow.disabled = state.refreshCycleActive;
+    }
 
     if (state.refreshCycleActive) {
         button.textContent = `refreshing ${state.refreshCycleDone}/${state.refreshCycleTotal}`;
@@ -1511,6 +1538,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const countdown = document.getElementById('refresh-countdown');
     if (countdown) {
         countdown.addEventListener('click', () => {
+            triggerRefresh();
+        });
+    }
+
+    const syncNow = document.getElementById('refresh-now');
+    if (syncNow) {
+        syncNow.addEventListener('click', () => {
             triggerRefresh();
         });
     }
