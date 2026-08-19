@@ -175,16 +175,25 @@ Each cell header shows a `(?)` tooltip icon. Duration/size cells also show a `�
 
 The app is a Symfony application in PHP 8.5. The app has one container. The container runs nginx, php-fpm, and cron. Supervisor starts all three processes.
 
-The app has two entry points:
+The app has three entry points:
 
 - A web app. It serves the dashboard page and the JSON API. *(phase 1)*
 - A CLI command `app:sync`. It fetches data from GitLab and caches it. Flags: `--full` (one-time backfill), `--refresh-open` (re-fetch sub-resources for all open MRs), and `--notify-slack` (after the sync, post Slack notifications for new and stale MRs — phase 2). *(phase 1)*
+- A long-running CLI command `app:refresh-worker` (phase 3). It polls a SQLite-backed
+  queue and drives on-demand incremental refresh cycles triggered by `POST
+  /api/refresh`; see §4.7a (SSE live refresh).
 
 Cron:
 
-- Every 15 minutes: `app:sync` (incremental). *(phase 1)*
-- Nightly at 03:00: `app:sync --refresh-open`. *(phase 1)*
-- Phase 2 replaces the 15-minute line with `app:sync --notify-slack`.
+- Nightly at 03:00: `app:sync --refresh-open --notify-slack`. *(phase 1, `--notify-slack` added phase 2; phase 3 moves stale-MR nudges here, see §4.7a)*
+- Daily at 04:33: `app:rank-users`.
+
+Phase 3 removes the 15-minute `app:sync` incremental cron line and the web
+process's stale-while-revalidate detached-sync spawn (`SyncTrigger`,
+formerly triggered from `ApiController::data()` when the cache aged past 60
+seconds). Both are superseded by `app:refresh-worker`: on-demand refreshes
+are now explicitly triggered from the browser instead of polled or spawned
+from a web request. See §4.7a.
 
 ### 4.2 Environment variables
 
@@ -269,23 +278,26 @@ The sync sleeps between requests to stay under `GITLAB_RPS`. A sync lock (stored
 
 ### 4.6 Refresh on page load
 
-The web app checks `last_sync` on every request to `/api/data`.
+`/api/data` serves whatever is currently cached; it never triggers a sync itself
+(that used to be a stale-while-revalidate spawn — see §4.7a for what replaced it).
 
-- If the cache is newer than 60 seconds, serve the cached data.
-- If the cache is older than 60 seconds, serve the stale cache immediately and spawn a detached `app:sync` process (guarded by the sync lock) so the next request is fresh. The page request never blocks on a sync.
-- If GitLab is unreachable, serve the stale cache.
+- If GitLab is unreachable, or a refresh cycle is in progress, the last cached data is served.
 
-This is stale-while-revalidate: the browser always gets an immediate answer, and a background sync refreshes the cache at most once per minute. Concurrent users share one sync — the sync lock serializes the background workers, and the web process never acquires the lock itself.
-
-The first load before `app:sync --full` has run uses the bounded 1-hour incremental path, so it does not block on full history.
+The first load before `app:sync --full` has run uses the bounded 1-hour incremental path
+(nightly `app:sync --refresh-open`, or an on-demand refresh cycle), so it does not block
+on full history.
 
 SQLite runs in WAL mode with a `busy_timeout` so the surviving writer and readers do not error under concurrent access.
 
 ### 4.7 Slack notification (phase 2)
 
-Slack notifications are a flag on the sync command: `app:sync --notify-slack`. The cron runs it every 15 minutes (phase 2). Without the flag the command only syncs; with it the command syncs and then notifies, so one command covers both modes.
+Slack notifications are a flag on the sync command: `app:sync --notify-slack`. Without
+the flag the command only syncs; with it the command syncs and then notifies, so one
+command covers both modes. As of phase 3 this only runs on the nightly `--refresh-open`
+cron (new-MR notifications moved to the refresh worker, §4.7a); the flag now covers
+stale-MR nudges (and any new-MR diff the worker didn't already cover).
 
-1. Run an incremental sync (the same steps as `app:sync`).
+1. Run the sync (`--refresh-open`, in the nightly case).
 2. Find MRs with `created_at` after `last_notify`. Bundle them into one message.
 3. For each new MR, count approvals and compute `X = max(0, REQUIRED_APPROVALS - approvals)`.
 4. Find MRs that turned stale (open and crossed the 60-day threshold) since `last_notify`. For each, prepare a nudge naming the author.
@@ -294,7 +306,7 @@ Slack notifications are a flag on the sync command: `app:sync --notify-slack`. T
 
 On first enablement, initialize `last_notify = now` so only MRs created after Slack was enabled are notified.
 
-If the incremental sync fails, the notifications are still posted from the cached data, and the message states that the sync failed and why.
+If the sync fails, the notifications are still posted from the cached data, and the message states that the sync failed and why.
 
 New-MR message format:
 
@@ -312,6 +324,45 @@ Stale nudge format:
 ```
 
 The command uses the Slack Web API `chat.postMessage` with the bot token.
+
+### 4.7a SSE live refresh (phase 3)
+
+`app:refresh-worker` is a long-running supervisord program that polls a SQLite-backed
+`refresh_queue` table and drives at most one refresh cycle at a time. It is the only
+process besides the cron syncs that talks to GitLab, and owns the whole `GITLAB_RPS`
+budget for on-demand refreshes.
+
+`POST /api/refresh?user=<id>` (no auth; `user` is the "My view" filter selection)
+enqueues a cycle:
+
+1. If idle and past the 30s cooldown after the previous cycle, the request is accepted
+   and a trigger is recorded (`sync_state.refresh_requested[_user]`).
+2. If a cycle is already running, the request is accepted and merges into it — its
+   `user` updates the active cycle's ordering for the remainder of the queue instead of
+   starting a second cycle.
+3. If still in cooldown, the request is rejected (`429`, `cooldown_remaining` seconds).
+
+`GET /api/refresh` returns `{active, total, done}` for the current/last cycle.
+
+Each cycle: one cheap `groupMergeRequests(state=opened, updated_after=lastSync-60)` list
+call seeds the queue (MR ids not yet cached are flagged `is_new` and always sort first;
+a defensive `state=closed` entry, mirroring the incremental sync, drops that MR from the
+cache instead of queuing it). The worker then processes queued MRs one at a time via
+`Synchronizer::syncMergeRequestForRefresh()` (the same sub-resource fetch the other sync
+modes use), ordered per the active cycle's `user`: (a) authored by them, (b) open and not
+yet approved by them, (c) approved by them, (d) the rest, ties by `updated_at DESC`.
+`requests_expected` starts at 4 (approvals, discussions, pipelines, commits) and is
+corrected once pipelines/commits are known (+1 per running/pending pipeline, +1 per
+not-yet-cached commit sha). Every completed sub-request publishes a Mercure `refresh`
+topic event `{type: progress, mr_id, requests_done, requests_expected}`; MR completion
+publishes `{type: done, mr_id}` on `refresh` and `{type: changed, mr_id}` on `data` so
+clients refetch that row. A newly discovered MR triggers
+`SlackNotifier::notifyNewMr()` immediately after its row is stored.
+
+Mercure (the hub binary, bundled in the image) is the push transport: anonymous
+subscribing is allowed, publishing requires the JWT (`MERCURE_JWT_SECRET`). Topics are
+public: `refresh` for cycle/progress events, `data` for "a row changed, refetch"
+events.
 
 ### 4.8 API contract
 
@@ -540,6 +591,14 @@ Phase 2 replaces the 15-minute line with:
 
 ```
 */15 * * * * php /app/bin/console app:sync --notify-slack
+```
+
+Phase 3 (see §4.7a) removes the 15-minute line and adds `--notify-slack` to the nightly
+one instead; `app:refresh-worker` runs as its own supervisord program, not a cron job:
+
+```
+0 3 * * * php /app/bin/console app:sync --refresh-open --notify-slack
+33 4 * * * php /app/bin/console app:rank-users
 ```
 
 For local development, `docker-compose.dev.yml` runs the app from the source checkout via bind mounts (`src/`, `public/`, `config/`, `bin/`), so code changes apply without rebuilding the image (nginx and php-fpm read files from disk on every request). It builds with `CLASSMAP_AUTHORITATIVE=""` so the autoloader keeps its PSR-4 fallback and classes added to the mounted `src/` resolve immediately; the production build (CI and the server) keeps the authoritative classmap default. `var/` is intentionally not mounted — the entrypoint chowns `/app/var` to `www-data`, which would take over the host checkout. The dev container is meant to run on the same host as production and mounts the same `cr-dashboard-data` volume, so the preview shows the real database; it mounts `docker/crontab.dev` (no scheduled jobs) over `/etc/crontab` so it never writes to the shared database on a schedule — the production cron keeps it fresh, and the dev container syncs only on demand (`docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync`). The image only needs a rebuild when `composer.json`/`composer.lock` or the Dockerfile change.

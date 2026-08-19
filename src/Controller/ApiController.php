@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Api\ApiBuilder;
-use App\Config\AppConfig;
 use App\Metrics\Buckets;
-use App\Sync\Synchronizer;
-use App\Sync\SyncTrigger;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
@@ -20,11 +17,8 @@ use function time;
 
 final class ApiController
 {
-    public function __construct(
-        private readonly ApiBuilder $apiBuilder,
-        private readonly SyncTrigger $syncTrigger,
-        private readonly Synchronizer $synchronizer,
-    ) {
+    public function __construct(private readonly ApiBuilder $apiBuilder)
+    {
     }
 
     #[Route('/api/data', name: 'api_data', methods: ['GET'])]
@@ -34,13 +28,8 @@ final class ApiController
         $user = $this->resolveUser($request);
         $now = time();
 
-        // Stale-while-revalidate: serve an immediate answer, and spawn a
-        // detached background sync when the cache is older than 60 seconds.
-        $lastSync = $this->synchronizer->lastSync();
-        if ($lastSync !== null && ($now - $lastSync) > AppConfig::CACHE_FRESH_SECONDS) {
-            $this->syncTrigger->maybeSpawn($now);
-        }
-
+        // Freshness is driven by the SSE refresh worker (POST /api/refresh)
+        // and the cron syncs; the web process never spawns a sync itself.
         return new JsonResponse($this->apiBuilder->build($granularity, $now, $user));
     }
 
