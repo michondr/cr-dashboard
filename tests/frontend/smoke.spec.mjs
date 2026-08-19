@@ -351,6 +351,48 @@ test('a poll with unchanged data skips the rebuild', async ({ page }) => {
     await expect(coverage.locator('.chart-tip')).toBeVisible();
 });
 
+test('drag-zooming one chart applies the same x-range to every chart, and double-click resets all', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+    await page.waitForTimeout(500);
+
+    const originalScales = await page.evaluate(() => window.__crChartXScales());
+    expect(originalScales.filter(Boolean).length).toBeGreaterThan(1);
+
+    const coverage = page.locator('.cell', { hasText: 'Coverage %' }).first();
+    const box = await coverage.locator('.chart-wrap').boundingBox();
+
+    // Drag-select a narrow x-range on one chart.
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width * 0.2, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, y, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+
+    const zoomedScales = await page.evaluate(() => window.__crChartXScales());
+    const present = zoomedScales.filter(Boolean);
+    expect(present.length).toBeGreaterThan(1);
+    // Every chart shares the same zoomed x-range.
+    for (const s of present) {
+        expect(s.min).toBeCloseTo(present[0].min, -2);
+        expect(s.max).toBeCloseTo(present[0].max, -2);
+    }
+    // The range actually narrowed from the full extent.
+    const before = originalScales.find(Boolean);
+    expect(present[0].max - present[0].min).toBeLessThan(before.max - before.min);
+
+    // Double-click resets every chart back to its full extent.
+    await coverage.locator('.chart-wrap').dblclick({ position: { x: box.width / 2, y: box.height / 2 } });
+    await page.waitForTimeout(300);
+    const resetScales = await page.evaluate(() => window.__crChartXScales());
+    const resetPresent = resetScales.filter(Boolean);
+    for (let i = 0; i < resetPresent.length; i++) {
+        expect(resetPresent[i].min).toBeCloseTo(originalScales.filter(Boolean)[i].min, -2);
+        expect(resetPresent[i].max).toBeCloseTo(originalScales.filter(Boolean)[i].max, -2);
+    }
+});
+
 test('a user keeps the same color across every chart they appear in', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.cell');

@@ -873,16 +873,15 @@ function createChart(wrap, key, meta, data) {
     resizeObserver.observe(wrap);
 
     wrap.addEventListener('dblclick', () => {
-        u.setScale('x', { min: xData[0], max: xData[xData.length - 1] });
-        u.redraw();
-        if (state.bucket !== 'day') {
-            loadData('day');
-        }
+        resetZoom();
     });
 
     return u;
 }
 
+// All charts share the same x time axis: a drag-zoom on one chart applies
+// the same x-range to every other chart, and the bucket-granularity switch
+// (if any) happens once for the whole panel, not per chart.
 function handleZoom(u) {
     if (!u.select || u.select.width === 0) {
         return;
@@ -893,7 +892,11 @@ function handleZoom(u) {
     const t2 = u.posToVal(right, 'x');
     const spanDays = (t2 - t1) / 86_400_000;
 
-    u.setScale('x', { min: t1, max: t2 });
+    for (const chart of charts) {
+        if (chart) {
+            chart.setScale('x', { min: t1, max: t2 });
+        }
+    }
 
     let bucket;
     if (spanDays >= 45) {
@@ -906,6 +909,22 @@ function handleZoom(u) {
 
     if (bucket !== state.bucket) {
         loadData(bucket);
+    }
+}
+
+// Double-click on any chart resets the zoom on every chart; if the zoom drag
+// had switched the bucket, this also switches back to the default day bucket.
+function resetZoom() {
+    for (const chart of charts) {
+        if (!chart || !chart.data || !chart.data[0] || !chart.data[0].length) {
+            continue;
+        }
+        const xd = chart.data[0];
+        chart.setScale('x', { min: xd[0], max: xd[xd.length - 1] });
+    }
+
+    if (state.bucket !== 'day') {
+        loadData('day');
     }
 }
 
@@ -1034,4 +1053,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Exposed for the Playwright test that verifies unchanged polls skip the
     // rebuild; not used by any runtime code path.
     window.__crDashboardReload = () => loadData(state.bucket);
+
+    // Exposed for the Playwright test that verifies zoom stays in sync across
+    // charts; not used by any runtime code path.
+    window.__crChartXScales = () => charts.map((c) => (c ? { min: c.scales.x.min, max: c.scales.x.max } : null));
 });
