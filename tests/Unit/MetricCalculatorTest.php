@@ -67,10 +67,14 @@ final class MetricCalculatorTest extends TestCase
         self::assertSame(2 * self::DAY, $this->valueAt($first, 1, $this->key($now - (18 * self::DAY))));
 
         $review = $metrics['time_to_review'];
-        // Bob's earliest activity on MR 101 is the discussion (day 9) -> 1 day.
-        self::assertSame(1 * self::DAY, $this->valueAt($review, 2, $this->key($now - (9 * self::DAY))));
+        // Points aggregate the trailing 30-day window. At day-9 Bob has two
+        // samples in the window: MR 102 approval (day 17, 3 days after
+        // creation) and the MR 101 discussion (day 9, 1 day) -> mean 2 days.
+        self::assertSame(2 * self::DAY, $this->valueAt($review, 2, $this->key($now - (9 * self::DAY))));
         self::assertSame(4 * self::DAY, $this->valueAt($review, 3, $this->key($now - (6 * self::DAY))));
         self::assertSame(2 * self::DAY, $this->valueAt($review, 1, $this->key($now - (18 * self::DAY))));
+        // The window makes the line continuous: Bob still has a value today.
+        self::assertSame(2 * self::DAY, $this->valueAt($review, 2, $this->key($now)));
 
         $coverage = $metrics['coverage'];
         // Opened in the rolling 30-day window ending today: MRs 101, 102, 103.
@@ -90,9 +94,11 @@ final class MetricCalculatorTest extends TestCase
         self::assertEquals(50, $this->valueAt($size, 1, $this->key($now - (30 * self::DAY))));
 
         $given = $metrics['approvals_given'];
+        // Rolling 30-day counts: at day-8 Bob's window holds both of his
+        // approvals (day 17 and day 8).
         self::assertSame(1, $this->valueAt($given, 2, $this->key($now - (17 * self::DAY))));
         self::assertSame(1, $this->valueAt($given, 1, $this->key($now - (18 * self::DAY))));
-        self::assertSame(1, $this->valueAt($given, 2, $this->key($now - (8 * self::DAY))));
+        self::assertSame(2, $this->valueAt($given, 2, $this->key($now - (8 * self::DAY))));
 
         $response = $metrics['first_response_time'];
         self::assertSame(1 * self::DAY, $this->valueAt($response, 2, $this->key($now - (9 * self::DAY))));

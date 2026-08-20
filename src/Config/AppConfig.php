@@ -10,6 +10,8 @@ final readonly class AppConfig
     public const WINDOW_DAYS = 60;
     public const COVERAGE_WINDOW_DAYS = 30;
     public const MERGED_WINDOW_DAYS = 30;
+    /** Trailing window for the mean/median and approvals-given chart points. */
+    public const ROLLING_WINDOW_DAYS = 30;
     public const LOCK_TIMEOUT_SECONDS = 1800;
 
     public function __construct(

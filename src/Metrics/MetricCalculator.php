@@ -44,8 +44,7 @@ final class MetricCalculator
     public function timeToFirstApprove(Dataset $data, string $granularity, int $now): MetricResult
     {
         $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
-        $index = $this->axisIndex($axis);
-        $raw = [];
+        $samples = [];
 
         foreach ($data->mrs as $mr) {
             $mrId = (int) $mr['id'];
@@ -57,15 +56,10 @@ final class MetricCalculator
 
             usort($approvals, static fn (array $a, array $b): int => $a['created_at'] <=> $b['created_at']);
             $first = $approvals[0];
-            $bucketIndex = $index[Buckets::key($first['created_at'], $granularity)] ?? null;
-            if ($bucketIndex === null) {
-                continue;
-            }
-
-            $raw[$first['user_id']][$bucketIndex][] = $first['created_at'] - $createdAt;
+            $samples[$first['user_id']][] = [$first['created_at'], $first['created_at'] - $createdAt];
         }
 
-        return $this->meanMedianResult($axis, 'seconds', $raw, $granularity);
+        return $this->meanMedianResult($axis, 'seconds', $samples, $granularity);
     }
 
     /**
@@ -75,8 +69,7 @@ final class MetricCalculator
     public function timeToReview(Dataset $data, string $granularity, int $now): MetricResult
     {
         $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
-        $index = $this->axisIndex($axis);
-        $raw = [];
+        $samples = [];
 
         foreach ($data->mrs as $mr) {
             $mrId = (int) $mr['id'];
@@ -91,16 +84,11 @@ final class MetricCalculator
             }
 
             foreach ($activities as $userId => $activityAt) {
-                $bucketIndex = $index[Buckets::key($activityAt, $granularity)] ?? null;
-                if ($bucketIndex === null) {
-                    continue;
-                }
-
-                $raw[$userId][$bucketIndex][] = $activityAt - $createdAt;
+                $samples[$userId][] = [$activityAt, $activityAt - $createdAt];
             }
         }
 
-        return $this->meanMedianResult($axis, 'seconds', $raw, $granularity);
+        return $this->meanMedianResult($axis, 'seconds', $samples, $granularity);
     }
 
     /**
@@ -184,8 +172,7 @@ final class MetricCalculator
     public function timeToMerge(Dataset $data, string $granularity, int $now): MetricResult
     {
         $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
-        $index = $this->axisIndex($axis);
-        $raw = [];
+        $samples = [];
 
         foreach ($data->mrs as $mr) {
             if ((string) $mr['state'] !== 'merged') {
@@ -197,15 +184,10 @@ final class MetricCalculator
                 continue;
             }
 
-            $bucketIndex = $index[Buckets::key((int) $mergedAt, $granularity)] ?? null;
-            if ($bucketIndex === null) {
-                continue;
-            }
-
-            $raw[(int) $mr['author_id']][$bucketIndex][] = (int) $mergedAt - (int) $mr['created_at'];
+            $samples[(int) $mr['author_id']][] = [(int) $mergedAt, (int) $mergedAt - (int) $mr['created_at']];
         }
 
-        return $this->meanMedianResult($axis, 'seconds', $raw, $granularity);
+        return $this->meanMedianResult($axis, 'seconds', $samples, $granularity);
     }
 
     /**
@@ -215,8 +197,7 @@ final class MetricCalculator
     public function mrSize(Dataset $data, string $granularity, int $now): MetricResult
     {
         $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
-        $index = $this->axisIndex($axis);
-        $raw = [];
+        $samples = [];
 
         foreach ($data->mrs as $mr) {
             $mrId = (int) $mr['id'];
@@ -230,15 +211,10 @@ final class MetricCalculator
                 $size += $commit['additions'] + $commit['deletions'];
             }
 
-            $bucketIndex = $index[Buckets::key((int) $mr['created_at'], $granularity)] ?? null;
-            if ($bucketIndex === null) {
-                continue;
-            }
-
-            $raw[(int) $mr['author_id']][$bucketIndex][] = $size;
+            $samples[(int) $mr['author_id']][] = [(int) $mr['created_at'], $size];
         }
 
-        return $this->meanMedianResult($axis, 'lines', $raw, $granularity);
+        return $this->meanMedianResult($axis, 'lines', $samples, $granularity);
     }
 
     /**
@@ -247,19 +223,26 @@ final class MetricCalculator
     public function approvalsGiven(Dataset $data, string $granularity, int $now): MetricResult
     {
         $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
-        $index = $this->axisIndex($axis);
-        $eventsByUser = [];
+        $timestampsByUser = [];
 
         foreach ($data->approvals as $approval) {
-            $bucketIndex = $index[Buckets::key((int) $approval['created_at'], $granularity)] ?? null;
-            if ($bucketIndex === null) {
+            $timestampsByUser[(int) $approval['user_id']][] = (int) $approval['created_at'];
+        }
+
+        $windowSeconds = AppConfig::ROLLING_WINDOW_DAYS * 86400;
+        /** @var array<string, Series> $persons */
+        $persons = [];
+        foreach ($timestampsByUser as $userId => $timestamps) {
+            $series = Aggregator::rollingCounts($axis, $timestamps, $windowSeconds);
+            if (!$this->hasData($series)) {
                 continue;
             }
 
-            $eventsByUser[(int) $approval['user_id']][$bucketIndex][] = true;
+            $persons[(string) $userId] = $series;
         }
+        ksort($persons);
 
-        return $this->countResult($axis, 'count', $eventsByUser, $granularity);
+        return new MetricResult($granularity, 'count', false, $persons);
     }
 
     /**
@@ -269,8 +252,7 @@ final class MetricCalculator
     public function firstResponseTime(Dataset $data, string $granularity, int $now): MetricResult
     {
         $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
-        $index = $this->axisIndex($axis);
-        $raw = [];
+        $samples = [];
 
         foreach ($data->mrs as $mr) {
             $mrId = (int) $mr['id'];
@@ -282,16 +264,11 @@ final class MetricCalculator
             }
 
             foreach ($activities as $userId => $activityAt) {
-                $bucketIndex = $index[Buckets::key($activityAt, $granularity)] ?? null;
-                if ($bucketIndex === null) {
-                    continue;
-                }
-
-                $raw[$userId][$bucketIndex][] = $activityAt - $createdAt;
+                $samples[$userId][] = [$activityAt, $activityAt - $createdAt];
             }
         }
 
-        return $this->meanMedianResult($axis, 'seconds', $raw, $granularity);
+        return $this->meanMedianResult($axis, 'seconds', $samples, $granularity);
     }
 
     /**
@@ -347,30 +324,20 @@ final class MetricCalculator
     }
 
     /**
-     * @param list<array{key: string, start: int}> $axis
+     * Each bucket's point aggregates the person's samples from the trailing
+     * ROLLING_WINDOW_DAYS window, so the lines read as continuous trends
+     * instead of isolated spikes on the days events happened.
      *
-     * @return array<string, int>
-     */
-    private function axisIndex(array $axis): array
-    {
-        $index = [];
-        foreach ($axis as $position => $bucket) {
-            $index[$bucket['key']] = $position;
-        }
-
-        return $index;
-    }
-
-    /**
      * @param list<array{key: string, start: int}> $axis
-     * @param array<int, array<int, list<int|float>>> $rawByUser
+     * @param array<int, list<array{0: int, 1: int|float}>> $samplesByUser
      */
-    private function meanMedianResult(array $axis, string $unit, array $rawByUser, string $granularity): MetricResult
+    private function meanMedianResult(array $axis, string $unit, array $samplesByUser, string $granularity): MetricResult
     {
+        $windowSeconds = AppConfig::ROLLING_WINDOW_DAYS * 86400;
         /** @var array<string, Series> $persons */
         $persons = [];
-        foreach ($rawByUser as $userId => $byBucket) {
-            $series = Aggregator::meanMedian($axis, $byBucket);
+        foreach ($samplesByUser as $userId => $samples) {
+            $series = Aggregator::rollingMeanMedian($axis, $samples, $windowSeconds);
             if (!$this->hasData($series)) {
                 continue;
             }
@@ -380,27 +347,6 @@ final class MetricCalculator
         ksort($persons);
 
         return new MetricResult($granularity, $unit, true, $persons);
-    }
-
-    /**
-     * @param list<array{key: string, start: int}> $axis
-     * @param array<int, array<int, list<mixed>>> $eventsByUser
-     */
-    private function countResult(array $axis, string $unit, array $eventsByUser, string $granularity): MetricResult
-    {
-        /** @var array<string, Series> $persons */
-        $persons = [];
-        foreach ($eventsByUser as $userId => $byBucket) {
-            $series = Aggregator::counts($axis, $byBucket);
-            if (!$this->hasData($series)) {
-                continue;
-            }
-
-            $persons[(string) $userId] = $series;
-        }
-        ksort($persons);
-
-        return new MetricResult($granularity, $unit, false, $persons);
     }
 
     /**

@@ -42,7 +42,7 @@ const METRICS = {
         unit: 'seconds',
         lowerBetter: true,
         tooltip: [
-            'The time from MR creation until the reviewer\'s first activity (approval or discussion).',
+            'The time from MR creation until the reviewer\'s first activity (approval or discussion), averaged over a trailing 30-day window.',
             'A low value means the reviewer responds fast.',
             'Lower is better.',
         ],
@@ -64,7 +64,7 @@ const METRICS = {
         unit: 'count',
         lowerBetter: false,
         tooltip: [
-            'The number of approvals the person gave, bucketed by the approval date.',
+            'The number of approvals the person gave in the trailing 30-day window.',
             'Shows the review load each person carries.',
             'Neither higher nor lower is better by itself; it reflects the team\'s division of work.',
         ],
@@ -75,7 +75,7 @@ const METRICS = {
         unit: 'seconds',
         lowerBetter: true,
         tooltip: [
-            'The time from MR creation until the first approval, owned by the first approver.',
+            'The time from MR creation until the first approval, owned by the first approver, averaged over a trailing 30-day window.',
             'A low value means the MR gets its first approval quickly.',
             'Lower is better.',
         ],
@@ -86,7 +86,7 @@ const METRICS = {
         unit: 'seconds',
         lowerBetter: true,
         tooltip: [
-            'The time from MR creation until it is merged, per author.',
+            'The time from MR creation until it is merged, per author, averaged over a trailing 30-day window.',
             'A low value means the person ships quickly.',
             'Lower is better.',
         ],
@@ -97,7 +97,7 @@ const METRICS = {
         unit: 'seconds',
         lowerBetter: true,
         tooltip: [
-            'The time from MR creation until the person\'s first discussion thread on that MR.',
+            'The time from MR creation until the person\'s first discussion thread on that MR, averaged over a trailing 30-day window.',
             'A low value means the person reacts quickly.',
             'Lower is better.',
         ],
@@ -108,7 +108,7 @@ const METRICS = {
         unit: 'lines',
         lowerBetter: false,
         tooltip: [
-            'The sum of additions and deletions over the MR\'s latest commits, per author.',
+            'The sum of additions and deletions over the MR\'s latest commits, per author, averaged over a trailing 30-day window.',
             'Large MRs are harder to review; the value reflects review difficulty.',
             'Neither higher nor lower is strictly better; smaller MRs are usually easier to review.',
         ],
