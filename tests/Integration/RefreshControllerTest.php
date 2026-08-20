@@ -12,7 +12,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 use function json_decode;
-use function time;
 
 final class RefreshControllerTest extends TestCase
 {
