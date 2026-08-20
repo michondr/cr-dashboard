@@ -1,0 +1,13 @@
+doctrine:
+    dbal:
+        # The sqlite3 driver (Doctrine\DBAL\Driver\SQLite3) uses the ext-sqlite3
+        # extension that ships in both the local static PHP build and the prod
+        # php:8.5-fpm-alpine image, so no pdo_sqlite is required anywhere.
+        driver: sqlite3
+        # DATABASE_PATH may be relative (local .env) or absolute (prod entrypoint
+        # writes /var/lib/cr-dashboard/dashboard.sqlite); resolve: makes a relative
+        # value absolute against the current working directory so the path is not
+        # interpreted relative to the php-fpm/cron process cwd at connect time.
+        path: '%env(resolve:DATABASE_PATH)%'
+    orm:
+        naming_strategy: doctrine.orm.naming_strategy.underscore_number_aware
