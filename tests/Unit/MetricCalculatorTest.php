@@ -105,6 +105,17 @@ final class MetricCalculatorTest extends TestCase
 
         $mergedCount = $metrics['merged_count'];
         self::assertSame(1, $this->valueAt($mergedCount, 2, $today));
+
+        $started = $metrics['discussions_started'];
+        // Bob's single discussion (day 9) is in the rolling 30-day window at
+        // day 9 and at every point since, so the count stays 1 from day 9 on.
+        // Alice and Cara never started a thread.
+        self::assertSame('count', $started->unit);
+        self::assertFalse($started->meanAndMedian);
+        self::assertSame(1, $this->valueAt($started, 2, $this->key($now - (9 * self::DAY))));
+        self::assertSame(1, $this->valueAt($started, 2, $this->key($now)));
+        self::assertArrayNotHasKey('1', $started->persons);
+        self::assertArrayNotHasKey('3', $started->persons);
     }
 
     public function testDurationMetricsCarryMeanAndMedianSeries(): void

@@ -5,7 +5,7 @@ Scope: frontend only (`public/app.js`, `public/style.css`, `public/index.html`, 
 
 ## Background
 
-The stats panel renders nine uPlot line charts (one per metric in `METRICS`), 5×2 grid on
+The stats panel renders ten uPlot line charts (one per metric in `METRICS`), 5×2 grid on
 desktop, stacked on ≤1024px. Charts are fully destroyed and rebuilt on every 60s data
 poll and on every mean/median toggle. Colors come from `COLORS[index]` where index is the
 per-chart object-key order of `metric.persons`, so the same person can have different

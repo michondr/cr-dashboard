@@ -124,6 +124,17 @@ const METRICS = {
             'Higher is generally better for throughput.',
         ],
     },
+    discussions_started: {
+        title: 'Discussions started',
+        kind: 'values',
+        unit: 'count',
+        lowerBetter: false,
+        tooltip: [
+            'The number of discussion threads the person started in the trailing 30-day window.',
+            'Shows how much written review feedback the person gives, complementing their approvals.',
+            'Neither higher nor lower is better by itself; it reflects the depth of the person\'s reviews.',
+        ],
+    },
 };
 
 let state = {

@@ -86,8 +86,9 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     const titles = await page.locator('.col-title a').allTextContents();
     expect(titles.every((t) => !/^[A-Z][A-Z0-9]+-\d+/.test(t))).toBe(true);
 
-    // All nine metric cells render.
-    expect(await page.locator('.cell').count()).toBe(9);
+    // All ten metric cells render, filling the 5×2 grid exactly.
+    expect(await page.locator('.cell').count()).toBe(10);
+    expect(await page.locator('.cell', { hasText: 'Discussions started' }).count()).toBe(1);
 
     // The pipeline indicator shows a running (spinner) pipeline on MR 204.
     expect(await page.locator('.pipe.spinner').count()).toBe(1);
@@ -107,7 +108,7 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
 
     // Mean/median segmented toggle re-renders without errors.
     await page.locator('.seg-control .seg-option', { hasText: 'median' }).first().click();
-    expect(await page.locator('.cell').count()).toBe(9);
+    expect(await page.locator('.cell').count()).toBe(10);
 
     expect(errors).toEqual([]);
 });
@@ -221,9 +222,16 @@ test('a changed event for an unknown MR splices its row in live, sorted, with no
         el.dataset.testMarker = 'untouched';
     });
 
-    // created_at (2026-08-18T20:12:05) is later than every existing body MR
-    // (the latest, 204 and 209, sit at 2026-08-18T20:12:04), so the new row
-    // must land at the very end of the body list.
+    // created_at must be later than every existing body MR so the new row
+    // lands at the very end. Derive it from the fixture (regenerated on a
+    // rolling "now", so its timestamps drift) rather than hardcoding a date.
+    const fixture = await (await request.get('/api/data')).json();
+    const latestCreatedAt = fixture.mrs.reduce(
+        (max, mr) => (mr.created_at > max ? mr.created_at : max),
+        '',
+    );
+    const nextCreatedAt = new Date(new Date(latestCreatedAt).getTime() + 1000).toISOString();
+
     await request.post('/__test/mr', {
         data: {
             id: 210,
@@ -236,7 +244,7 @@ test('a changed event for an unknown MR splices its row in live, sorted, with no
             state: 'opened',
             draft: false,
             stale: false,
-            created_at: '2026-08-18T20:12:05+00:00',
+            created_at: nextCreatedAt,
             merged_at: null,
             closed_at: null,
             web_url: 'https://gitlab.example.test/group/app/-/merge_requests/210',

@@ -34,6 +34,7 @@ final class MetricCalculator
             'first_response_time' => $this->firstResponseTime($data, $granularity, $now),
             'mr_size' => $this->mrSize($data, $granularity, $now),
             'merged_count' => $this->mergedCount($data, $granularity, $now),
+            'discussions_started' => $this->discussionsStarted($data, $granularity, $now),
         ];
     }
 
@@ -308,6 +309,36 @@ final class MetricCalculator
     }
 
     /**
+     * Metric 13 - discussions started per person, bucketed by the discussion
+     * date. The written-feedback complement to approvals given: it measures
+     * review depth, not just one-click approvals.
+     */
+    public function discussionsStarted(Dataset $data, string $granularity, int $now): MetricResult
+    {
+        $axis = Buckets::axis($now, $granularity, AppConfig::WINDOW_DAYS);
+        $timestampsByUser = [];
+
+        foreach ($data->discussions as $discussion) {
+            $timestampsByUser[(int) $discussion['user_id']][] = (int) $discussion['created_at'];
+        }
+
+        $windowSeconds = AppConfig::ROLLING_WINDOW_DAYS * 86400;
+        /** @var array<string, Series> $persons */
+        $persons = [];
+        foreach ($timestampsByUser as $userId => $timestamps) {
+            $series = Aggregator::rollingCounts($axis, $timestamps, $windowSeconds);
+            if (!$this->hasData($series)) {
+                continue;
+            }
+
+            $persons[(string) $userId] = $series;
+        }
+        ksort($persons);
+
+        return new MetricResult($granularity, 'count', false, $persons);
+    }
+
+    /**
      * @param array<int, int> $activities
      *
      * @return array<int, int>
@@ -331,8 +362,12 @@ final class MetricCalculator
      * @param list<array{key: string, start: int}> $axis
      * @param array<int, list<array{0: int, 1: int|float}>> $samplesByUser
      */
-    private function meanMedianResult(array $axis, string $unit, array $samplesByUser, string $granularity): MetricResult
-    {
+    private function meanMedianResult(
+        array $axis,
+        string $unit,
+        array $samplesByUser,
+        string $granularity,
+    ): MetricResult {
         $windowSeconds = AppConfig::ROLLING_WINDOW_DAYS * 86400;
         /** @var array<string, Series> $persons */
         $persons = [];

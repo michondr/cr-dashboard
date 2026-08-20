@@ -63,6 +63,10 @@ final class ApiContractTest extends TestCase
             [$now - self::DAY],
         );
         $this->database->execute(
+            'INSERT INTO discussions (mr_id, user_id, created_at) VALUES (101, 1, ?)',
+            [$now - self::DAY],
+        );
+        $this->database->execute(
             'INSERT INTO commits (mr_id, sha, message, committed_date, current, additions, deletions)
              VALUES (101, ?, ?, ?, 1, ?, ?)',
             ['abc123', 'first commit', $now - (2 * self::DAY), 10, 2],
@@ -173,6 +177,17 @@ final class ApiContractTest extends TestCase
         $coverageBob = $coveragePersons['2'];
         self::assertIsArray($coverageBob);
         self::assertArrayHasKey('values', $coverageBob);
+
+        self::assertArrayHasKey('discussions_started', $metrics);
+        $started = $metrics['discussions_started'];
+        self::assertIsArray($started);
+        self::assertSame('day', $started['bucket']);
+        self::assertSame('count', $started['unit']);
+        $startedPersons = $started['persons'];
+        self::assertIsArray($startedPersons);
+        self::assertArrayHasKey('1', $startedPersons);
+        self::assertIsArray($startedPersons['1']);
+        self::assertArrayHasKey('values', $startedPersons['1']);
     }
 
     public function testApiMrReturnsASingleRowMatchingTheListShape(): void

@@ -451,6 +451,7 @@ The bucketing dimension differs per metric:
 | 7 Approvals given | activity date (approval) |
 | 8 First response time | activity date (first discussion) |
 | 9 Merged MR count | `merged_at` (snapshot of last 30 days) |
+| 10 Discussions started | activity date (discussion) |
 
 Time series are reconstructed from event timestamps (`created_at`, `merged_at`, `closed_at`, approval/discussion times), not from stored snapshots. An MR was open at day D if `created_at <= D` and (`merged_at` is null or `merged_at > D`) and (`closed_at` is null or `closed_at > D`).
 
@@ -510,6 +511,10 @@ Computed from the latest pipeline (the one with the highest `id`) and its jobs:
 - Green check when the latest pipeline finished with `success`.
 - Red indicator when the latest pipeline finished with `failed`.
 - Neutral indicator for `canceled`/`skipped`/`manual`. No indicator if there is no pipeline.
+
+#### Metric 13 — Discussions started (per person, reviewer-centric)
+
+Count of discussion threads started by the person within the trailing 30-day window, bucketed by the discussion date. The written-feedback complement to Metric 9 (Approvals given): it measures review depth, not just one-click approvals.
 
 ### 4.10 Metric cell tooltip
 
