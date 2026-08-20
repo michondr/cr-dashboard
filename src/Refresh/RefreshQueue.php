@@ -19,37 +19,28 @@ use function usort;
  *   A trigger arriving mid-cycle updates `refresh_active_user` in place
  *   (merges its ordering into the pending remainder) rather than queuing
  *   a second cycle.
- * - `refresh_cooldown_until`: sync_state key blocking new cycles for 30s
- *   after a cycle completes.
  */
 final class RefreshQueue
 {
-    public const COOLDOWN_SECONDS = 30;
-
     public function __construct(private readonly Database $database)
     {
     }
 
     /**
-     * @return array{accepted: bool, reason: null|string, cooldownRemaining: int}
+     * @return array{accepted: bool, reason: null|string}
      */
     public function requestCycle(int $now, null|int $userId): array
     {
         if ($this->isActive()) {
             $this->setState('refresh_active_user', $userId === null ? '' : (string) $userId);
 
-            return ['accepted' => true, 'reason' => 'merged', 'cooldownRemaining' => 0];
-        }
-
-        $cooldownUntil = (int) ($this->getState('refresh_cooldown_until') ?? '0');
-        if ($now < $cooldownUntil) {
-            return ['accepted' => false, 'reason' => 'cooldown', 'cooldownRemaining' => $cooldownUntil - $now];
+            return ['accepted' => true, 'reason' => 'merged'];
         }
 
         $this->setState('refresh_requested', '1');
         $this->setState('refresh_requested_user', $userId === null ? '' : (string) $userId);
 
-        return ['accepted' => true, 'reason' => 'queued', 'cooldownRemaining' => 0];
+        return ['accepted' => true, 'reason' => 'queued'];
     }
 
     public function hasPendingRequest(): bool
@@ -211,14 +202,10 @@ final class RefreshQueue
         );
     }
 
-    /**
-     * Ends the active cycle and starts the 30s cooldown.
-     */
     public function endCycle(int $now): void
     {
         $this->database->execute("DELETE FROM sync_state WHERE key = 'refresh_active'");
         $this->database->execute("DELETE FROM sync_state WHERE key = 'refresh_active_user'");
-        $this->setState('refresh_cooldown_until', (string) ($now + self::COOLDOWN_SECONDS));
     }
 
     /**

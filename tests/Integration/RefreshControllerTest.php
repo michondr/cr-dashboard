@@ -37,22 +37,6 @@ final class RefreshControllerTest extends TestCase
         self::assertSame('queued', $body['reason']);
     }
 
-    public function testPostIsRejectedDuringTheCooldown(): void
-    {
-        $now = time();
-        $this->database->execute(
-            "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('refresh_cooldown_until', ?)",
-            [(string) ($now + 30)],
-        );
-
-        $response = $this->post('/api/refresh');
-
-        self::assertSame(429, $response->getStatusCode());
-        $body = $this->decode($response->getContent());
-        self::assertFalse($body['accepted']);
-        self::assertSame('cooldown', $body['reason']);
-    }
-
     public function testGetReturnsCycleStatus(): void
     {
         $kernel = new Kernel('test', true);

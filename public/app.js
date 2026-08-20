@@ -199,6 +199,9 @@ function handleRefreshEvent(payload) {
             row.classList.remove('refresh-queued', 'refresh-fetching');
             row.style.removeProperty('--refresh-progress');
         }
+        // Rows were already patched in place per `done` event; the charts and
+        // header are refreshed once per cycle here rather than once per row.
+        refreshChartsAndMeta();
 
         return;
     }
@@ -256,20 +259,15 @@ async function pollPresence() {
 // sorted position live (follow-up F2).
 async function refetchAndPatchRow(mrId) {
     try {
-        const params = new URLSearchParams({ bucket: state.bucket });
-        if (state.userId) {
-            params.set('user', state.userId);
-        }
-        const response = await fetch(`/api/data?${params.toString()}`);
-        if (!response.ok) {
+        const response = await fetch(`/api/mr/${encodeURIComponent(String(mrId))}`);
+        if (!response.ok && response.status !== 404) {
             return;
         }
-        const data = await response.json();
-        chartData = data;
-        renderStats(data);
+        const body = await response.json();
+        const mr = body.mr;
 
-        const mr = (data.mrs || []).find((candidate) => String(candidate.id) === String(mrId));
         const existingRow = refreshProgressRow(mrId);
+        // 404 / null: no longer cached or no longer open — drop the row.
         if (!mr) {
             if (existingRow) {
                 existingRow.remove();
@@ -343,34 +341,12 @@ async function triggerRefresh() {
             params.set('user', state.userId);
         }
         const query = params.toString();
-        const response = await fetch(`/api/refresh${query ? `?${query}` : ''}`, { method: 'POST' });
-        if (response.ok) {
-            const body = await response.json();
-            // A declined trigger during the post-cycle cooldown: surface the
-            // wait on the sync-now button instead of failing silently.
-            if (body.accepted === false && body.cooldown_remaining > 0) {
-                flashSyncNow(`cooldown ${Math.ceil(body.cooldown_remaining)}s`);
-            }
-        }
+        await fetch(`/api/refresh${query ? `?${query}` : ''}`, { method: 'POST' });
     } catch {
         // Offline or the API is unreachable; the next tick retries.
     }
     resetRefreshDeadline();
     pollRefreshStatus();
-}
-
-const SYNC_NOW_LABEL = "Sync now, I can't wait";
-
-// Temporarily swaps the sync-now button label (e.g. for cooldown feedback).
-function flashSyncNow(text) {
-    const button = document.getElementById('refresh-now');
-    if (!button) {
-        return;
-    }
-    button.textContent = text;
-    setTimeout(() => {
-        button.textContent = SYNC_NOW_LABEL;
-    }, 2000);
 }
 
 async function pollRefreshStatus() {
@@ -385,12 +361,39 @@ async function pollRefreshStatus() {
         state.refreshCycleDone = status.done || 0;
         if (state.refreshCycleActive) {
             setTimeout(pollRefreshStatus, 1000);
-        } else if (state.refreshCycleTotal > 0) {
-            // A completed cycle refreshed data; pick it up.
+        } else if (state.refreshCycleTotal > 0 && !state.sseConnected) {
+            // Without SSE the per-row patches never arrived; do a full reload.
+            // With SSE the rows are already current and cycle_done refreshes
+            // the charts, so nothing to do here.
             loadData(state.bucket);
         }
     } catch {
         state.refreshCycleActive = false;
+    }
+}
+
+// Refetches the dataset to update the charts, header and user list WITHOUT
+// rebuilding the MR list (rows are patched individually via SSE events, and a
+// full list rebuild would lose scroll position mid-review).
+async function refreshChartsAndMeta() {
+    try {
+        const params = new URLSearchParams({ bucket: state.bucket });
+        if (state.userId) {
+            params.set('user', state.userId);
+        }
+        const response = await fetch(`/api/data?${params.toString()}`);
+        if (!response.ok) {
+            return;
+        }
+        const data = await response.json();
+        state.jiraUrl = data.meta.jira_url || '';
+        usersById = new Map((data.users || []).map((user) => [String(user.id), user]));
+        chartData = data;
+        renderHeader(data);
+        renderUserFilter(data);
+        renderStats(data);
+    } catch {
+        // Offline; the next cycle or poll retries.
     }
 }
 

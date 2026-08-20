@@ -32,8 +32,7 @@ final class RefreshController
         return new JsonResponse([
             'accepted' => $result['accepted'],
             'reason' => $result['reason'],
-            'cooldown_remaining' => $result['cooldownRemaining'],
-        ], $result['accepted'] ? 202 : 429);
+        ], 202);
     }
 
     #[Route('/api/refresh', name: 'api_refresh_status', methods: ['GET'])]

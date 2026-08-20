@@ -33,6 +33,20 @@ final class ApiController
         return new JsonResponse($this->apiBuilder->build($granularity, $now, $user));
     }
 
+    /**
+     * Single-MR payload for SSE-driven row patches: same shape as one element
+     * of `mrs` in `/api/data`, without the metrics/users/meta overhead. 404
+     * (with `mr: null`) when the MR is not cached or no longer open, which the
+     * frontend treats as "remove the row".
+     */
+    #[Route('/api/mr/{id}', name: 'api_mr', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function mr(int $id): JsonResponse
+    {
+        $mr = $this->apiBuilder->buildMr($id, time());
+
+        return new JsonResponse(['mr' => $mr], $mr === null ? 404 : 200);
+    }
+
     private function resolveGranularity(Request $request): string
     {
         $bucket = (string) $request->query->get('bucket', Buckets::DAY);

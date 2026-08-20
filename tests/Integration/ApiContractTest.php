@@ -175,6 +175,38 @@ final class ApiContractTest extends TestCase
         self::assertArrayHasKey('values', $coverageBob);
     }
 
+    public function testApiMrReturnsASingleRowMatchingTheListShape(): void
+    {
+        $payload = $this->fetchApiData(['bucket' => 'day']);
+        self::assertIsArray($payload['mrs']);
+        self::assertNotEmpty($payload['mrs']);
+        /** @var array<string, mixed> $first */
+        $first = $payload['mrs'][0];
+        self::assertIsInt($first['id']);
+
+        $kernel = new Kernel('test', true);
+        $kernel->boot();
+        $request = Request::create('/api/mr/' . $first['id'], 'GET');
+        $response = $kernel->handle($request);
+        $kernel->terminate($request, $response);
+
+        self::assertSame(200, $response->getStatusCode());
+        $decoded = json_decode((string) $response->getContent(), true);
+        self::assertIsArray($decoded);
+        self::assertIsArray($decoded['mr']);
+        // age_seconds is now-relative and may differ between the two calls.
+        unset($decoded['mr']['age_seconds'], $first['age_seconds']);
+        self::assertSame($first, $decoded['mr']);
+
+        $missing = Request::create('/api/mr/999999999', 'GET');
+        $missingResponse = $kernel->handle($missing);
+        $kernel->terminate($missing, $missingResponse);
+        self::assertSame(404, $missingResponse->getStatusCode());
+        $missingDecoded = json_decode((string) $missingResponse->getContent(), true);
+        self::assertIsArray($missingDecoded);
+        self::assertNull($missingDecoded['mr']);
+    }
+
     public function testInvalidBucketFallsBackToDay(): void
     {
         $payload = $this->fetchApiData(['bucket' => 'bogus']);

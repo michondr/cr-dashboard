@@ -61,6 +61,26 @@ final class ApiBuilder
     }
 
     /**
+     * Payload for a single open MR (same shape as one element of `mrs` in the
+     * full payload), or null when the MR is not cached or not open. Serves
+     * `/api/mr/{id}` so an SSE-driven row patch does not have to fetch and
+     * rebuild the whole dataset payload.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function buildMr(int $id, int $now): null|array
+    {
+        $dataset = $this->loadDataset();
+        foreach ($dataset->mrs as $mr) {
+            if ((int) $mr['id'] === $id && (string) $mr['state'] === 'opened') {
+                return $this->buildMrRow($mr, $this->projectInfos(), $dataset, $now);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * @return array<string, int|string|null>
      */
     private function buildMeta(int $now): array

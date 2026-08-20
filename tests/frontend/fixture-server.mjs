@@ -27,6 +27,17 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // Single-MR payload, mirroring GET /api/mr/{id}: the row shape from the
+    // fixture's mrs list, 404 with mr:null when unknown.
+    const mrMatch = url.pathname.match(/^\/api\/mr\/(\d+)$/);
+    if (mrMatch && req.method === 'GET') {
+        const mr = fixture.mrs.find((candidate) => String(candidate.id) === mrMatch[1]) || null;
+        res.writeHead(mr === null ? 404 : 200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ mr }));
+
+        return;
+    }
+
     if (url.pathname === '/api/refresh' && req.method === 'POST') {
         res.writeHead(202, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ accepted: true, reason: 'queued', cooldown_remaining: 0 }));

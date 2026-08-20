@@ -50,19 +50,15 @@ final class RefreshQueueTest extends TestCase
         self::assertSame(2, $this->queue->activeUserId());
     }
 
-    public function testRequestCycleIsRejectedDuringTheCooldownAfterACompletedCycle(): void
+    public function testRequestCycleIsAcceptedImmediatelyAfterACompletedCycle(): void
     {
         $this->queue->beginCycle(1000, null);
         $this->queue->endCycle(1000);
 
         $result = $this->queue->requestCycle(1010, null);
 
-        self::assertFalse($result['accepted']);
-        self::assertSame('cooldown', $result['reason']);
-        self::assertSame(RefreshQueue::COOLDOWN_SECONDS - 10, $result['cooldownRemaining']);
-
-        $after = $this->queue->requestCycle(1000 + RefreshQueue::COOLDOWN_SECONDS, null);
-        self::assertTrue($after['accepted']);
+        self::assertTrue($result['accepted']);
+        self::assertSame('queued', $result['reason']);
     }
 
     public function testNextQueuedJobOrdersNewMrsFirstThenUserAuthoredThenUnapprovedThenTheRest(): void
