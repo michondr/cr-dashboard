@@ -8,6 +8,7 @@ use App\Config\AppConfig;
 use App\Refresh\RefreshQueue;
 use App\Storage\Database;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 use PHPUnit\Framework\TestCase;
 
 use function sys_get_temp_dir;
@@ -25,6 +26,7 @@ final class RefreshQueueTest extends TestCase
             sys_get_temp_dir() . '/cr-dashboard-refresh-' . uniqid('', true) . '.sqlite',
         );
         $this->database = new Database($this->config);
+        TestSchema::migrate($this->config);
         $this->queue = new RefreshQueue($this->database);
     }
 

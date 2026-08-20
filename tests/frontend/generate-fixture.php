@@ -8,6 +8,7 @@ use App\Storage\Database;
 use App\Sync\Synchronizer;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
@@ -63,6 +64,7 @@ $path = sys_get_temp_dir() . '/cr-dashboard-fixture-' . uniqid('', true) . '.sql
 $config = TestAppConfig::create($path);
 $client = new FakeGitLabClient();
 $database = new Database($config);
+TestSchema::migrate($config);
 $synchronizer = new Synchronizer($client, $database, $config);
 
 $client->projects = [

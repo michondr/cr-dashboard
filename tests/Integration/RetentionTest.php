@@ -9,6 +9,7 @@ use App\Storage\Database;
 use App\Sync\Synchronizer;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 use PHPUnit\Framework\TestCase;
 
 use function is_file;
@@ -29,6 +30,7 @@ final class RetentionTest extends TestCase
     {
         $this->config = TestAppConfig::create(sys_get_temp_dir() . '/cr-dashboard-ret-' . uniqid('', true) . '.sqlite');
         $this->database = new Database($this->config);
+        TestSchema::migrate($this->config);
         $this->synchronizer = new Synchronizer(new FakeGitLabClient(), $this->database, $this->config);
     }
 

@@ -31,8 +31,9 @@ use const CASE_LOWER;
 
 /**
  * Exercises the DBAL repositories against a schema built from the Doctrine
- * entity metadata — the same schema the baseline migration will produce — so
- * the repositories are verified on the Doctrine-native types they target.
+ * entity metadata — the Doctrine-native shape a follow-up migration lands once
+ * the sync/read code moves onto the repositories — so they are verified on the
+ * types they target.
  */
 final class RepositoriesTest extends TestCase
 {

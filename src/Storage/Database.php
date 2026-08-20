@@ -43,7 +43,6 @@ final class Database
         $this->connection->busyTimeout(5000);
         $this->connection->exec('PRAGMA journal_mode = WAL;');
         $this->connection->exec('PRAGMA foreign_keys = ON;');
-        Schema::apply($this);
     }
 
     public function path(): string

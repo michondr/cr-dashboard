@@ -7,11 +7,14 @@ namespace App\Tests\Integration;
 use App\Kernel;
 use App\Storage\Database;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+use function is_file;
 use function json_decode;
+use function unlink;
 
 final class RefreshControllerTest extends TestCase
 {
@@ -19,8 +22,17 @@ final class RefreshControllerTest extends TestCase
 
     protected function setUp(): void
     {
+        // The kernel boots against this fixed path, so a previous run's file
+        // would carry an old schema; drop it before the migration runs.
+        foreach (['var/test.sqlite', 'var/test.sqlite-wal', 'var/test.sqlite-shm'] as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+
         $config = TestAppConfig::create('var/test.sqlite');
         $this->database = new Database($config);
+        TestSchema::migrate($config);
         foreach (['sync_state', 'refresh_queue'] as $table) {
             $this->database->execute('DELETE FROM ' . $table);
         }

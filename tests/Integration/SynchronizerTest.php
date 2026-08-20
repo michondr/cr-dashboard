@@ -11,6 +11,7 @@ use App\Sync\Synchronizer;
 use App\Sync\SyncLockedException;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 use PHPUnit\Framework\TestCase;
 
 use function array_merge;
@@ -34,6 +35,7 @@ final class SynchronizerTest extends TestCase
         );
         $this->client = new FakeGitLabClient();
         $this->database = new Database($this->config);
+        TestSchema::migrate($this->config);
         $this->synchronizer = new Synchronizer($this->client, $this->database, $this->config);
     }
 

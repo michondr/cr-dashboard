@@ -43,5 +43,11 @@ EOF
 # secret as the PHP-side publisher (App\Mercure\HmacTokenProvider).
 export MERCURE_JWT_SECRET=${MERCURE_JWT_SECRET:-change-me}
 
+# Create/upgrade the schema from the Doctrine migrations before any daemon
+# starts. Runs as www-data so the SQLite file and doctrine_migration_versions
+# stay writable by php-fpm and the cron workers; a no-op on restarts once the
+# baseline version is recorded.
+su-exec www-data php /app/bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
 # Start nginx, php-fpm and cron under supervisor.
 exec /usr/bin/supervisord -c /etc/supervisord.conf

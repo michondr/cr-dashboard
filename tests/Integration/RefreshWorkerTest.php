@@ -13,6 +13,7 @@ use App\Sync\Synchronizer;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\FakeHub;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 use PHPUnit\Framework\TestCase;
 
 use function array_column;
@@ -40,6 +41,7 @@ final class RefreshWorkerTest extends TestCase
         );
         $this->client = new FakeGitLabClient();
         $this->database = new Database($this->config);
+        TestSchema::migrate($this->config);
         $this->synchronizer = new Synchronizer($this->client, $this->database, $this->config);
         $this->queue = new RefreshQueue($this->database);
         $this->hub = new FakeHub();

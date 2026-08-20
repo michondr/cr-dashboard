@@ -25,6 +25,7 @@ RUN apk add --no-cache \
         dcron \
         nginx \
         openssl \
+        su-exec \
         supervisor
 
 # Mercure hub (a single static Caddy-based binary) for server->browser push.

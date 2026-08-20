@@ -8,12 +8,15 @@ use App\Config\AppConfig;
 use App\Kernel;
 use App\Storage\Database;
 use App\Tests\Support\TestAppConfig;
+use App\Tests\Support\TestSchema;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 use function is_array;
+use function is_file;
 use function json_decode;
 use function time;
+use function unlink;
 
 final class ApiContractTest extends TestCase
 {
@@ -24,8 +27,17 @@ final class ApiContractTest extends TestCase
 
     protected function setUp(): void
     {
+        // The kernel boots against this fixed path, so a previous run's file
+        // would carry an old schema; drop it before the migration runs.
+        foreach (['var/test.sqlite', 'var/test.sqlite-wal', 'var/test.sqlite-shm'] as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+
         $this->config = TestAppConfig::create('var/test.sqlite');
         $this->database = new Database($this->config);
+        TestSchema::migrate($this->config);
         foreach (
             [
             'users',
