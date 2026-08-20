@@ -81,6 +81,13 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     );
     expect(badgeCounts.some((n) => n >= 2)).toBe(true);
 
+    // MR labels render as tag badges in the same cell as the status badges.
+    expect(await page.locator('.col-state .label-badge').count()).toBeGreaterThanOrEqual(1);
+    expect(await page.locator('.col-state .label-badge', { hasText: 'urgent' }).count()).toBe(1);
+    // A ready MR (201) carries two labels alongside its status badge.
+    const readyWithLabels = page.locator('.col-state').filter({ has: page.locator('.status-ready') });
+    expect(await readyWithLabels.locator('.label-badge').count()).toBeGreaterThanOrEqual(2);
+
     // The Jira ticket prefix is stripped from the title text (it stays in the
     // Jira column).
     const titles = await page.locator('.col-title a').allTextContents();

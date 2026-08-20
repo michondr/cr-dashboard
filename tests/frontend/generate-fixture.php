@@ -50,6 +50,7 @@ $mr = static function (
         'web_url' => 'https://gitlab.example.test/group/app/-/merge_requests/' . $id,
         'merge_status' => 'can_be_merged',
         'has_conflicts' => false,
+        'labels' => [],
     ];
 };
 $commit = static fn (string $sha, string $message, int $when): array => [
@@ -71,8 +72,19 @@ $client->projects = [
 $blockedMr = $mr(208, 'opened', $now - (2 * DAY), null, 2, 'REC-204 - Export the web');
 $blockedMr['merge_status'] = 'cannot_be_merged';
 $blockedMr['has_conflicts'] = true;
+$blockedMr['labels'] = ['chore'];
 $draftMr = $mr(209, 'opened', $now - DAY, null, 1, 'REC-205 - Draft the docs');
 $draftMr['draft'] = true;
+$draftMr['labels'] = ['docs'];
+
+// A few MRs carry labels so the smoke test can assert the label badges render
+// alongside the status badges.
+$labeledMr201 = $mr(201, 'opened', $now - (2 * DAY), null, 1, 'REC-200 - Add an export button');
+$labeledMr201['labels'] = ['frontend', 'urgent'];
+$labeledMr202 = $mr(202, 'opened', $now - (75 * DAY), null, 2, 'REC-150 - Migrate the legacy API');
+$labeledMr202['labels'] = ['legacy'];
+$labeledMr205 = $mr(205, 'opened', $now - (3 * DAY), null, 1, 'REC-201 - Polish the onboarding');
+$labeledMr205['labels'] = ['frontend'];
 
 // MR 204 carries a markdown description so the frontend smoke test can assert
 // the hover tooltip renders markdown (heading, strong, inline code, list,
@@ -93,15 +105,16 @@ $markdownMr['description'] = implode("\n", [
     '$client->getRedirect($request);',
     '```',
 ]);
+$markdownMr['labels'] = ['bugfix'];
 
 $client->mergeRequests['all'] = [
     $mr(301, 'merged', $now - (6 * DAY), $now - (2 * DAY), 1, 'REC-101 - Ship the parser'),
     $mr(302, 'merged', $now - (20 * DAY), $now - (12 * DAY), 2, 'REC-102 - Refactor the cache'),
-    $mr(201, 'opened', $now - (2 * DAY), null, 1, 'REC-200 - Add an export button'),
-    $mr(202, 'opened', $now - (75 * DAY), null, 2, 'REC-150 - Migrate the legacy API'),
+    $labeledMr201,
+    $labeledMr202,
     $mr(203, 'closed', $now - (30 * DAY), null, 3, 'REC-300 - Try websockets'),
     $markdownMr,
-    $mr(205, 'opened', $now - (3 * DAY), null, 1, 'REC-201 - Polish the onboarding'),
+    $labeledMr205,
     $mr(206, 'opened', $now - (5 * DAY), null, 2, 'REC-202 - Cache invalidation fix'),
     $mr(207, 'opened', $now - (8 * DAY), null, 3, 'REC-203 - Add an audit log'),
     $blockedMr,

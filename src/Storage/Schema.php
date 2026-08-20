@@ -37,7 +37,8 @@ final class Schema
             updated_at INTEGER NOT NULL,
             web_url TEXT,
             merge_status TEXT NOT NULL DEFAULT \'\',
-            has_conflicts INTEGER NOT NULL DEFAULT 0
+            has_conflicts INTEGER NOT NULL DEFAULT 0,
+            labels TEXT NOT NULL DEFAULT \'[]\'
         )');
 
         $database->execute('CREATE TABLE IF NOT EXISTS approvals (
@@ -120,6 +121,9 @@ final class Schema
             "TEXT NOT NULL DEFAULT ''",
         );
         self::addColumnIfMissing($database, 'merge_requests', 'has_conflicts', 'INTEGER NOT NULL DEFAULT 0');
+        // MR labels as a JSON array of names (GitLab reports them as a plain
+        // string list). Old rows start empty until the next sync refreshes them.
+        self::addColumnIfMissing($database, 'merge_requests', 'labels', "TEXT NOT NULL DEFAULT '[]'");
         self::addColumnIfMissing($database, 'discussions', 'resolved', 'INTEGER NOT NULL DEFAULT 1');
         // Project display name and avatar for the leftmost MR-list column. Old
         // rows get an empty name (the frontend falls back to the path) and no

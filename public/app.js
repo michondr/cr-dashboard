@@ -794,6 +794,13 @@ function renderMrRow(mr, dimmed) {
         badge.textContent = label;
         stateCell.appendChild(badge);
     }
+    // MR labels (as reported by GitLab) render as tag-style badges after the
+    // status ones. textContent only, per the GitLab-content rendering rule.
+    for (const label of mr.labels || []) {
+        const badge = el('span', 'badge label-badge');
+        badge.textContent = label;
+        stateCell.appendChild(badge);
+    }
     row.appendChild(stateCell);
 
     const age = el('span', 'col-age');

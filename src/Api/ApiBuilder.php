@@ -15,6 +15,9 @@ use App\Sync\Synchronizer;
 use function array_key_exists;
 use function count;
 use function gmdate;
+use function is_array;
+use function is_string;
+use function json_decode;
 use function rtrim;
 use function sprintf;
 use function usort;
@@ -267,7 +270,37 @@ final class ApiBuilder
             'unresolved_discussions' => $unresolvedDiscussions,
             'approved' => $approved,
             'ready' => $ready,
+            'labels' => $this->labelsFor($mr),
         ];
+    }
+
+    /**
+     * MR label names from the stored JSON column. Feeds the label badges.
+     *
+     * @param array<string, int|float|string|null> $mr
+     *
+     * @return list<string>
+     */
+    private function labelsFor(array $mr): array
+    {
+        $raw = $mr['labels'] ?? '';
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $labels = [];
+        foreach ($decoded as $label) {
+            if (is_string($label)) {
+                $labels[] = $label;
+            }
+        }
+
+        return $labels;
     }
 
     /**

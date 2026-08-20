@@ -59,6 +59,10 @@ final class ApiContractTest extends TestCase
 
         $this->insertMr(101, 'opened', $now - (2 * self::DAY), null, null, 1, 'REC-1234 - Add feature');
         $this->database->execute(
+            'UPDATE merge_requests SET labels = ? WHERE id = 101',
+            ['["urgent","frontend"]'],
+        );
+        $this->database->execute(
             'INSERT INTO approvals (mr_id, user_id, created_at) VALUES (101, 2, ?)',
             [$now - self::DAY],
         );
@@ -149,6 +153,7 @@ final class ApiContractTest extends TestCase
         self::assertSame(0, $openMr['unresolved_discussions']);
         self::assertFalse($openMr['approved'], 'one approval is below the required two');
         self::assertFalse($openMr['ready']);
+        self::assertSame(['urgent', 'frontend'], $openMr['labels']);
 
         self::assertArrayHasKey('metrics', $payload);
         $metrics = $payload['metrics'];

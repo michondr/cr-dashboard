@@ -12,6 +12,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
 use function array_key_exists;
+use function array_unique;
+use function array_values;
 use function count;
 use function gmdate;
 use function in_array;
@@ -20,6 +22,7 @@ use function is_bool;
 use function is_float;
 use function is_int;
 use function is_string;
+use function json_encode;
 use function mb_strlen;
 use function mb_substr;
 use function sprintf;
@@ -529,8 +532,8 @@ final class Synchronizer
             'INSERT OR REPLACE INTO merge_requests (
                 id, iid, project_id, title, description, author_id, state, draft,
                 created_at, merged_at, closed_at, updated_at, web_url,
-                merge_status, has_conflicts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                merge_status, has_conflicts, labels
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
                 $this->intValue($mr, 'id'),
                 $this->intValue($mr, 'iid'),
@@ -547,8 +550,37 @@ final class Synchronizer
                 $this->nullableStringValue($mr, 'web_url'),
                 $this->stringValue($mr, 'merge_status'),
                 $this->boolValue($mr, 'has_conflicts') ? 1 : 0,
+                $this->labelsJson($mr),
             ],
         );
+    }
+
+    /**
+     * MR labels as a JSON array of names. GitLab reports labels as a plain
+     * string list on the merge-request endpoints; the object form
+     * `{"name": ...}` is tolerated anyway.
+     *
+     * @param array<array-key, mixed> $mr
+     */
+    private function labelsJson(array $mr): string
+    {
+        $labels = $mr['labels'] ?? [];
+        if (!is_array($labels)) {
+            return '[]';
+        }
+
+        $names = [];
+        foreach ($labels as $label) {
+            if (is_string($label) && $label !== '') {
+                $names[] = $label;
+            } elseif (is_array($label) && is_string($label['name'] ?? null)) {
+                $names[] = $label['name'];
+            }
+        }
+
+        $json = json_encode(array_values(array_unique($names)));
+
+        return $json === false ? '[]' : $json;
     }
 
     /**

@@ -108,6 +108,20 @@ final class SynchronizerTest extends TestCase
         self::assertNotNull($this->synchronizer->lastSync());
     }
 
+    public function testMrLabelsAreStoredAsJson(): void
+    {
+        $this->client->projects = [
+            ['id' => 1, 'path_with_namespace' => 'group/proj', 'name' => 'Proj', 'avatar_url' => null],
+        ];
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00', null, 1, ['labels' => ['frontend', 'urgent']]),
+        ];
+        $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
+
+        $stored = $this->database->query('SELECT labels FROM merge_requests WHERE id = 101');
+        self::assertSame('["frontend","urgent"]', $stored[0]['labels']);
+    }
+
     public function testSubResourcesAreWipedAndReinserted(): void
     {
         $this->seedSingleMrWithApprovals([2, 3]);
