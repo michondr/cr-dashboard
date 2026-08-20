@@ -312,15 +312,21 @@ final class Synchronizer
     }
 
     /**
-     * Identifiers of every cached open MR, for refresh cycles: MRs not in the
-     * GitLab "updated since" list still get their sub-resources re-fetched.
+     * Identifiers of every cached open non-stale MR, for refresh cycles: MRs
+     * not in the GitLab "updated since" list still get their sub-resources
+     * re-fetched. Stale MRs (older than STALE_DAYS) are excluded — they rarely
+     * change and are covered by the nightly full sync; one that does change on
+     * GitLab still enters the cycle via the updated-since list.
      *
      * @return list<array{id: int, project_id: int, iid: int, author_id: int}>
      */
-    public function openMergeRequestRefs(): array
+    public function openMergeRequestRefs(int $now): array
     {
+        $staleCutoff = $now - (AppConfig::STALE_DAYS * 86400);
         $rows = $this->database->query(
-            "SELECT id, project_id, iid, author_id FROM merge_requests WHERE state = 'opened'",
+            "SELECT id, project_id, iid, author_id FROM merge_requests
+             WHERE state = 'opened' AND created_at > ?",
+            [$staleCutoff],
         );
 
         $refs = [];

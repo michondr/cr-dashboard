@@ -101,12 +101,13 @@ final class RefreshWorker
             $this->queue->enqueue($id, $isNew, $now);
         }
 
-        // Every other cached open MR joins the cycle too (the "rest" tier):
+        // Every other cached open non-stale MR joins the cycle too (the "rest"
+        // tier; stale MRs are left to the nightly full sync):
         // approvals and discussions can change without bumping `updated_at`,
         // so the updated-since list alone would leave them stale. Their main
         // row is current, so they carry a cached ref instead of a payload and
         // only re-fetch sub-resources.
-        foreach ($this->synchronizer->openMergeRequestRefs() as $ref) {
+        foreach ($this->synchronizer->openMergeRequestRefs($now) as $ref) {
             if (array_key_exists($ref['id'], $this->cyclePayloads)) {
                 continue;
             }

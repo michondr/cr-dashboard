@@ -148,6 +148,25 @@ final class RefreshWorkerTest extends TestCase
         self::assertCount(2, $doneIds);
     }
 
+    public function testStaleCachedMrsAreLeftToTheNightlySync(): void
+    {
+        $now = (int) strtotime('2026-08-20T12:00:00+00:00');
+        $this->seedCachedMr(101, 1, updated: '2026-08-10T09:00:00+00:00');
+        // Created >60 days ago: stale, must not be queued by a refresh cycle.
+        $this->seedCachedMr(102, 2, updated: '2026-05-01T09:00:00+00:00');
+        $this->client->mergeRequests['opened'] = [];
+
+        $this->queue->requestCycle($now, null);
+        $this->worker->tick($now);
+
+        $queuedIds = array_column(
+            $this->database->query('SELECT mr_id FROM refresh_queue'),
+            'mr_id',
+        );
+        self::assertContains(101, $queuedIds);
+        self::assertNotContains(102, $queuedIds);
+    }
+
     public function testCycleStartedBroadcastsTheOrderedQueuedMrIds(): void
     {
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
