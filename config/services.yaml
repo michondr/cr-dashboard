@@ -12,11 +12,11 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
-    App\Mercure\HmacTokenProvider:
+    App\Review\Infrastructure\Mercure\HmacTokenProvider:
         arguments:
             $secret: '%env(MERCURE_JWT_SECRET)%'
 
-    Symfony\Component\Mercure\Jwt\TokenProviderInterface: '@App\Mercure\HmacTokenProvider'
+    Symfony\Component\Mercure\Jwt\TokenProviderInterface: '@App\Review\Infrastructure\Mercure\HmacTokenProvider'
 
     Symfony\Component\Mercure\HubInterface:
         class: Symfony\Component\Mercure\Hub
@@ -24,7 +24,7 @@ services:
             $url: '%env(MERCURE_URL)%'
             $jwtProvider: '@Symfony\Component\Mercure\Jwt\TokenProviderInterface'
 
-    App\Mercure\MercureSubscriptionReaderInterface: '@App\Mercure\HttpMercureSubscriptionReader'
+    App\Review\Infrastructure\Mercure\MercureSubscriptionReaderInterface: '@App\Review\Infrastructure\Mercure\HttpMercureSubscriptionReader'
 
     App\Config\AppConfig:
         arguments:

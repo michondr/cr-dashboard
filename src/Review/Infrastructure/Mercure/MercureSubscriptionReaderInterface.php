@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Mercure;
+namespace App\Review\Infrastructure\Mercure;
 
 /**
  * Reads active subscriber counts from the Mercure hub's subscription API

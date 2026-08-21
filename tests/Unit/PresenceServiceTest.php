@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit;
 
-use App\Mercure\PresenceService;
+use App\Review\Infrastructure\Mercure\PresenceService;
 use App\Tests\Support\FakeMercureSubscriptionReader;
 use PHPUnit\Framework\TestCase;
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Mercure;
+namespace App\Review\Infrastructure\Mercure;
 
 /**
  * "Connected dashboards" headcount (item 7): every connected dashboard's

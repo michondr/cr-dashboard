@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Support;
 
-use App\GitLab\GitLabClientInterface;
-use App\GitLab\GitLabException;
+use App\Review\Infrastructure\GitLab\GitLabClientInterface;
+use App\Review\Infrastructure\GitLab\GitLabException;
 
 use function array_key_exists;
 

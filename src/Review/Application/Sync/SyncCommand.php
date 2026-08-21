@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace App\Sync;
+namespace App\Review\Application\Sync;
 
-use App\GitLab\GitLabException;
+use App\Review\Infrastructure\GitLab\GitLabException;
+use App\Review\Infrastructure\Slack\SlackNotifier;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;

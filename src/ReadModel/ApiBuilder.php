@@ -2,15 +2,13 @@
 
 declare(strict_types=1);
 
-namespace App\Api;
+namespace App\ReadModel;
 
 use App\Config\AppConfig;
-use App\Metrics\Dataset;
 use App\Metrics\JiraTicket;
 use App\Metrics\MetricCalculator;
 use App\Metrics\PipelineIndicator;
-use App\Storage\Database;
-use App\Sync\Synchronizer;
+use App\Shared\Infrastructure\Persistence\SyncStateStore;
 
 use function array_key_exists;
 use function count;
@@ -34,10 +32,10 @@ final class ApiBuilder
     private const RANK_INTERVAL_SECONDS = 86400;
 
     public function __construct(
-        private readonly Database $database,
+        private readonly DatasetRepository $dataset,
         private readonly MetricCalculator $calculator,
         private readonly AppConfig $config,
-        private readonly Synchronizer $synchronizer,
+        private readonly SyncStateStore $syncState,
     ) {
     }
 
@@ -48,7 +46,7 @@ final class ApiBuilder
      */
     public function build(string $granularity, int $now, null|int $user = null): array
     {
-        $dataset = $this->loadDataset();
+        $dataset = $this->dataset->load();
 
         $metrics = [];
         foreach ($this->calculator->all($dataset, $granularity, $now) as $name => $result) {
@@ -73,10 +71,10 @@ final class ApiBuilder
      */
     public function buildMr(int $id, int $now): null|array
     {
-        $dataset = $this->loadDataset();
+        $dataset = $this->dataset->load();
         foreach ($dataset->mrs as $mr) {
             if ((int) $mr['id'] === $id && (string) $mr['state'] === 'opened') {
-                return $this->buildMrRow($mr, $this->projectInfos(), $dataset, $now);
+                return $this->buildMrRow($mr, $this->dataset->projectInfos(), $dataset, $now);
             }
         }
 
@@ -88,9 +86,11 @@ final class ApiBuilder
      */
     private function buildMeta(int $now): array
     {
-        $lastSync = $this->synchronizer->lastSync();
+        $lastSyncRaw = $this->syncState->get('last_sync');
+        $lastSync = $lastSyncRaw === null ? null : (int) $lastSyncRaw;
         $cacheAge = $lastSync === null ? null : $now - $lastSync;
-        $lastRank = $this->synchronizer->lastRank();
+        $lastRankRaw = $this->syncState->get('last_rank_at');
+        $lastRank = $lastRankRaw === null ? null : (int) $lastRankRaw;
 
         return [
             'required_approvals' => $this->config->requiredApprovals,
@@ -134,7 +134,7 @@ final class ApiBuilder
      */
     private function buildMrs(Dataset $dataset, int $now, null|int $user): array
     {
-        $projects = $this->projectInfos();
+        $projects = $this->dataset->projectInfos();
         $approvedByUser = $user === null ? [] : $this->approverMrIdsByUser($dataset, $user);
 
         $rows = [];
@@ -166,7 +166,7 @@ final class ApiBuilder
         $ids = [];
         foreach ($dataset->approvals as $approval) {
             if ((int) $approval['user_id'] === $user) {
-                $ids[(int) $approval['mr_id']] = true;
+                $ids[(int) $approval['merge_request_id']] = true;
             }
         }
 
@@ -326,7 +326,7 @@ final class ApiBuilder
     {
         $first = null;
         foreach ($dataset->approvals as $approval) {
-            if ((int) $approval['mr_id'] !== $mrId) {
+            if ((int) $approval['merge_request_id'] !== $mrId) {
                 continue;
             }
             $at = (int) $approval['created_at'];
@@ -346,7 +346,7 @@ final class ApiBuilder
     {
         $count = 0;
         foreach ($dataset->discussions as $discussion) {
-            if ((int) $discussion['mr_id'] !== $mrId) {
+            if ((int) $discussion['merge_request_id'] !== $mrId) {
                 continue;
             }
             if ((int) ($discussion['resolved'] ?? 1) === 0) {
@@ -367,7 +367,7 @@ final class ApiBuilder
     {
         $approvals = [];
         foreach ($dataset->approvals as $approval) {
-            if ((int) $approval['mr_id'] !== $mrId) {
+            if ((int) $approval['merge_request_id'] !== $mrId) {
                 continue;
             }
             $approvals[] = [
@@ -400,7 +400,7 @@ final class ApiBuilder
     {
         $pipelines = [];
         foreach ($dataset->pipelines as $pipeline) {
-            if ((int) $pipeline['mr_id'] !== $mrId) {
+            if ((int) $pipeline['merge_request_id'] !== $mrId) {
                 continue;
             }
             $pipelines[] = [
@@ -411,7 +411,7 @@ final class ApiBuilder
 
         $jobs = [];
         foreach ($dataset->jobs as $job) {
-            if ((int) $job['mr_id'] !== $mrId) {
+            if ((int) $job['merge_request_id'] !== $mrId) {
                 continue;
             }
             $jobs[] = [
@@ -430,7 +430,7 @@ final class ApiBuilder
     {
         $shas = [];
         foreach ($dataset->commits as $commit) {
-            if ((int) $commit['mr_id'] !== $mrId) {
+            if ((int) $commit['merge_request_id'] !== $mrId) {
                 continue;
             }
             if ((int) $commit['current'] !== 1) {
@@ -440,24 +440,6 @@ final class ApiBuilder
         }
 
         return $shas;
-    }
-
-    /**
-     * @return array<int, array{id: int, path_with_namespace: string, name: string, avatar_url: string|null}>
-     */
-    private function projectInfos(): array
-    {
-        $infos = [];
-        foreach ($this->database->query('SELECT id, path_with_namespace, name, avatar_url FROM projects') as $row) {
-            $infos[(int) $row['id']] = [
-                'id' => (int) $row['id'],
-                'path_with_namespace' => (string) $row['path_with_namespace'],
-                'name' => (string) $row['name'],
-                'avatar_url' => $row['avatar_url'] === null ? null : (string) $row['avatar_url'],
-            ];
-        }
-
-        return $infos;
     }
 
     /**
@@ -473,19 +455,6 @@ final class ApiBuilder
             'name' => '',
             'avatar_url' => null,
         ];
-    }
-
-    private function loadDataset(): Dataset
-    {
-        return new Dataset(
-            $this->database->query('SELECT * FROM users ORDER BY mr_count DESC, name ASC'),
-            $this->database->query('SELECT * FROM merge_requests'),
-            $this->database->query('SELECT * FROM approvals'),
-            $this->database->query('SELECT * FROM discussions'),
-            $this->database->query('SELECT * FROM commits'),
-            $this->database->query('SELECT * FROM pipelines'),
-            $this->database->query('SELECT * FROM jobs'),
-        );
     }
 
     private function iso(int $epoch): string

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Mercure;
+namespace App\Review\Infrastructure\Mercure;
 
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Jwt\TokenProviderInterface;

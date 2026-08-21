@@ -156,6 +156,45 @@ final class InfrastructureStoresTest extends TestCase
         self::assertNull($queue->nextQueuedJob(1));
     }
 
+    public function testRequestCycleIsAcceptedImmediatelyAfterACompletedCycle(): void
+    {
+        $queue = $this->queue();
+        $queue->beginCycle(1000, null);
+        $queue->endCycle(1000);
+
+        $result = $queue->requestCycle(1010, null);
+
+        self::assertTrue($result['accepted']);
+        self::assertSame('queued', $result['reason']);
+    }
+
+    public function testOrderedQueuedMrIdsMatchesTheNextQueuedJobPopOrderWithoutConsumingTheQueue(): void
+    {
+        $queue = $this->queue();
+        $this->insertUser(1, 'Alice');
+        $this->insertUser(2, 'Bob');
+        $this->insertMr(101, 1, 100);
+        $this->insertMr(102, 2, 200);
+        $this->insertMr(103, 2, 300);
+        $this->insertMr(104, 2, 400);
+        $this->connection->executeStatement(
+            'INSERT INTO approvals (merge_request_id, user_id, created_at) VALUES (103, 1, \'1970-01-01 00:00:01\')',
+        );
+
+        $queue->beginCycle(1000, 1);
+        $queue->enqueue(102, false, 1000);
+        $queue->enqueue(103, false, 1000);
+        $queue->enqueue(104, true, 1000);
+        $queue->enqueue(101, false, 1000);
+
+        self::assertSame([104, 101, 102, 103], $queue->orderedQueuedMrIds(1));
+
+        // A snapshot, not a pop: the queue is untouched and still poppable in the same order.
+        $job = $queue->nextQueuedJob(1);
+        self::assertNotNull($job);
+        self::assertSame(104, $job['mr_id']);
+    }
+
     public function testStatusReportsTotalAndDoneCounts(): void
     {
         $queue = $this->queue();

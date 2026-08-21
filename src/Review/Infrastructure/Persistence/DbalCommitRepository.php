@@ -51,6 +51,11 @@ final class DbalCommitRepository implements CommitRepository
         ) !== false;
     }
 
+    public function deleteByMergeRequest(int $mrId): void
+    {
+        $this->connection->executeStatement('DELETE FROM commits WHERE merge_request_id = ?', [$mrId]);
+    }
+
     /**
      * @param array<string, int|float|string|null> $commit
      */

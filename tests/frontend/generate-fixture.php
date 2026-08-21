@@ -2,10 +2,19 @@
 
 declare(strict_types=1);
 
-use App\Api\ApiBuilder;
 use App\Metrics\MetricCalculator;
-use App\Storage\Database;
-use App\Sync\Synchronizer;
+use App\ReadModel\ApiBuilder;
+use App\ReadModel\DbalDatasetRepository;
+use App\Review\Application\Sync\Synchronizer;
+use App\Review\Infrastructure\Persistence\DbalApprovalRepository;
+use App\Review\Infrastructure\Persistence\DbalCommitRepository;
+use App\Review\Infrastructure\Persistence\DbalDiscussionRepository;
+use App\Review\Infrastructure\Persistence\DbalMergeRequestRepository;
+use App\Review\Infrastructure\Persistence\DbalPipelineRepository;
+use App\Review\Infrastructure\Persistence\DbalProjectRepository;
+use App\Review\Infrastructure\Persistence\DbalUserRepository;
+use App\Shared\Infrastructure\Persistence\ConnectionFactory;
+use App\Shared\Infrastructure\Persistence\SyncStateStore;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\TestAppConfig;
 use App\Tests\Support\TestSchema;
@@ -63,9 +72,21 @@ $commit = static fn (string $sha, string $message, int $when): array => [
 $path = sys_get_temp_dir() . '/cr-dashboard-fixture-' . uniqid('', true) . '.sqlite';
 $config = TestAppConfig::create($path);
 $client = new FakeGitLabClient();
-$database = new Database($config);
 TestSchema::migrate($config);
-$synchronizer = new Synchronizer($client, $database, $config);
+$connection = (new ConnectionFactory($config))->create();
+$synchronizer = new Synchronizer(
+    $client,
+    new DbalMergeRequestRepository($connection),
+    new DbalUserRepository($connection),
+    new DbalProjectRepository($connection),
+    new DbalApprovalRepository($connection),
+    new DbalDiscussionRepository($connection),
+    new DbalCommitRepository($connection),
+    new DbalPipelineRepository($connection),
+    new SyncStateStore($connection),
+    $connection,
+    $config,
+);
 
 $client->projects = [
     ['id' => 1, 'path_with_namespace' => 'group/app', 'name' => 'App', 'avatar_url' => null],
@@ -213,7 +234,12 @@ $synchronizer->full($now);
 $client->mrCountByAuthor = [1 => 4, 2 => 7, 3 => 2];
 $synchronizer->rankUsers($now);
 
-$builder = new ApiBuilder($database, new MetricCalculator(), $config, $synchronizer);
+$builder = new ApiBuilder(
+    new DbalDatasetRepository($connection),
+    new MetricCalculator(),
+    $config,
+    new SyncStateStore($connection),
+);
 $payload = $builder->build('day', $now);
 
 file_put_contents(

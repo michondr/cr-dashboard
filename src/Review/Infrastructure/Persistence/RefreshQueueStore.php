@@ -12,8 +12,8 @@ use function usort;
 
 /**
  * Persists the SQLite-backed refresh cycle/queue state (see docs/feature-sse-refresh.md
- * item 2) in `refresh_queue` plus a handful of `sync_state` keys — the same
- * contract as `App\Refresh\RefreshQueue`, on the DBAL connection:
+ * item 2) in `refresh_queue` plus a handful of `sync_state` keys — the
+ * RefreshWorker's persistence boundary, on the DBAL connection:
  *
  * - `refresh_requested` / `refresh_requested_user`: a trigger waiting for the
  *   worker to pick up (set by `POST /api/refresh`, cleared once a cycle starts).
@@ -111,7 +111,7 @@ final class RefreshQueueStore
             $this->connection,
             "SELECT rq.mr_id AS mr_id, rq.is_new AS is_new,
                     COALESCE(mr.author_id, -1) AS author_id,
-                    COALESCE(mr.updated_at, rq.enqueued_at) AS updated_at,
+                    COALESCE(strftime('%s', mr.updated_at), rq.enqueued_at) AS updated_at,
                     EXISTS(SELECT 1 FROM approvals a
                            WHERE a.merge_request_id = rq.mr_id AND a.user_id = ?) AS approved_by_user
              FROM refresh_queue rq
@@ -149,7 +149,7 @@ final class RefreshQueueStore
             $this->connection,
             "SELECT rq.mr_id AS mr_id, rq.is_new AS is_new,
                     COALESCE(mr.author_id, -1) AS author_id,
-                    COALESCE(mr.updated_at, rq.enqueued_at) AS updated_at,
+                    COALESCE(strftime('%s', mr.updated_at), rq.enqueued_at) AS updated_at,
                     EXISTS(SELECT 1 FROM approvals a
                            WHERE a.merge_request_id = rq.mr_id AND a.user_id = ?) AS approved_by_user
              FROM refresh_queue rq

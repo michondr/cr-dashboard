@@ -6,9 +6,11 @@ namespace App\Tests\Integration;
 
 use App\Config\AppConfig;
 use App\Kernel;
-use App\Storage\Database;
+use App\Shared\Infrastructure\Persistence\ConnectionFactory;
+use App\Shared\Infrastructure\Persistence\SqliteDateTime;
 use App\Tests\Support\TestAppConfig;
 use App\Tests\Support\TestSchema;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -23,7 +25,7 @@ final class ApiContractTest extends TestCase
     private const DAY = 86400;
 
     private AppConfig $config;
-    private Database $database;
+    private Connection $connection;
 
     protected function setUp(): void
     {
@@ -36,8 +38,8 @@ final class ApiContractTest extends TestCase
         }
 
         $this->config = TestAppConfig::create('var/test.sqlite');
-        $this->database = new Database($this->config);
         TestSchema::migrate($this->config);
+        $this->connection = (new ConnectionFactory($this->config))->create();
         foreach (
             [
             'users',
@@ -51,46 +53,46 @@ final class ApiContractTest extends TestCase
             'sync_state',
             ] as $table
         ) {
-            $this->database->execute('DELETE FROM ' . $table);
+            $this->connection->executeStatement('DELETE FROM ' . $table);
         }
 
         $now = time();
 
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url) VALUES (1, ?, ?, ?)',
             ['Alice', 'alice', null],
         );
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url) VALUES (2, ?, ?, ?)',
             ['Bob', 'bob', null],
         );
-        $this->database->execute(
-            "INSERT INTO projects (id, path_with_namespace, name, avatar_url) VALUES (1, ?, ?, NULL)",
+        $this->connection->executeStatement(
+            'INSERT INTO projects (id, path_with_namespace, name, avatar_url) VALUES (1, ?, ?, NULL)',
             ['group/proj', 'Proj'],
         );
 
         $this->insertMr(101, 'opened', $now - (2 * self::DAY), null, null, 1, 'REC-1234 - Add feature');
-        $this->database->execute(
+        $this->connection->executeStatement(
             'UPDATE merge_requests SET labels = ? WHERE id = 101',
             ['["urgent","frontend"]'],
         );
-        $this->database->execute(
-            'INSERT INTO approvals (mr_id, user_id, created_at) VALUES (101, 2, ?)',
-            [$now - self::DAY],
+        $this->connection->executeStatement(
+            'INSERT INTO approvals (merge_request_id, user_id, created_at) VALUES (101, 2, ?)',
+            [SqliteDateTime::toStorage($now - self::DAY)],
         );
-        $this->database->execute(
-            'INSERT INTO discussions (mr_id, user_id, created_at) VALUES (101, 1, ?)',
-            [$now - self::DAY],
+        $this->connection->executeStatement(
+            'INSERT INTO discussions (merge_request_id, user_id, created_at) VALUES (101, 1, ?)',
+            [SqliteDateTime::toStorage($now - self::DAY)],
         );
-        $this->database->execute(
-            'INSERT INTO commits (mr_id, sha, message, committed_date, current, additions, deletions)
+        $this->connection->executeStatement(
+            'INSERT INTO commits (merge_request_id, sha, message, committed_date, current, additions, deletions)
              VALUES (101, ?, ?, ?, 1, ?, ?)',
-            ['abc123', 'first commit', $now - (2 * self::DAY), 10, 2],
+            ['abc123', 'first commit', SqliteDateTime::toStorage($now - (2 * self::DAY)), 10, 2],
         );
 
         $this->insertMr(102, 'merged', $now - (20 * self::DAY), $now - (10 * self::DAY), null, 2, 'Just a fix');
 
-        $this->database->execute(
+        $this->connection->executeStatement(
             "INSERT INTO sync_state (key, value) VALUES ('last_sync', ?)",
             [(string) ($now - 30)],
         );
@@ -272,9 +274,9 @@ final class ApiContractTest extends TestCase
         $this->insertMr(103, 'opened', $now - (3 * self::DAY), null, null, 2, 'REC-2000 - Mine');
         // MR 104: open, authored by user 1, approved by user 2.
         $this->insertMr(104, 'opened', $now - (4 * self::DAY), null, null, 1, 'REC-2001 - Done');
-        $this->database->execute(
-            'INSERT INTO approvals (mr_id, user_id, created_at) VALUES (104, 2, ?)',
-            [$now - (2 * self::DAY)],
+        $this->connection->executeStatement(
+            'INSERT INTO approvals (merge_request_id, user_id, created_at) VALUES (104, 2, ?)',
+            [SqliteDateTime::toStorage($now - (2 * self::DAY))],
         );
 
         // User 1 (Alice): her MRs (101, 104) plus MRs she has not approved (103).
@@ -290,18 +292,18 @@ final class ApiContractTest extends TestCase
     {
         // Bob ranks highest, Alice and Carol tie at 1 (name asc: Alice before Carol),
         // Dave has none and sorts last by name.
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (3, ?, ?, NULL, 1)',
             ['Carol', 'carol'],
         );
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (4, ?, ?, NULL, 0)',
             ['Dave', 'dave'],
         );
-        $this->database->execute('UPDATE users SET mr_count = 5 WHERE id = 2');
-        $this->database->execute('UPDATE users SET mr_count = 1 WHERE id = 1');
+        $this->connection->executeStatement('UPDATE users SET mr_count = 5 WHERE id = 2');
+        $this->connection->executeStatement('UPDATE users SET mr_count = 1 WHERE id = 1');
         $now = time();
-        $this->database->execute(
+        $this->connection->executeStatement(
             "INSERT INTO sync_state (key, value) VALUES ('last_rank_at', ?)",
             [(string) $now],
         );
@@ -389,7 +391,7 @@ final class ApiContractTest extends TestCase
         int $authorId,
         string $title,
     ): void {
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO merge_requests (
                 id, iid, project_id, title, description, author_id, state, draft,
                 created_at, merged_at, closed_at, updated_at, web_url
@@ -403,10 +405,10 @@ final class ApiContractTest extends TestCase
                 $authorId,
                 $state,
                 0,
-                $createdAt,
-                $mergedAt,
-                $closedAt,
-                $createdAt,
+                SqliteDateTime::toStorage($createdAt),
+                $mergedAt === null ? null : SqliteDateTime::toStorage($mergedAt),
+                $closedAt === null ? null : SqliteDateTime::toStorage($closedAt),
+                SqliteDateTime::toStorage($createdAt),
                 'https://gitlab.example.test/group/proj/-/merge_requests/' . $id,
             ],
         );

@@ -2,10 +2,13 @@
 
 declare(strict_types=1);
 
-namespace App\Sync;
+namespace App\Review\Infrastructure\Slack;
 
 use App\Config\AppConfig;
-use App\Storage\Database;
+use App\Shared\Infrastructure\Persistence\SqliteDateTime;
+use App\Shared\Infrastructure\Persistence\SqliteRows;
+use App\Shared\Infrastructure\Persistence\SyncStateStore;
+use Doctrine\DBAL\Connection;
 
 use function curl_exec;
 use function curl_init;
@@ -25,7 +28,8 @@ use const JSON_THROW_ON_ERROR;
 final class SlackNotifier
 {
     public function __construct(
-        private readonly Database $database,
+        private readonly Connection $connection,
+        private readonly SyncStateStore $syncState,
         private readonly AppConfig $config,
     ) {
     }
@@ -43,15 +47,15 @@ final class SlackNotifier
             return;
         }
 
-        $row = $this->database->query('SELECT * FROM merge_requests WHERE id = ?', [$mrId]);
-        if ($row === []) {
+        $row = SqliteRows::first($this->connection, 'SELECT * FROM merge_requests WHERE id = ?', [$mrId]);
+        if ($row === null) {
             return;
         }
 
-        $mr = $this->decorateMr($row[0]);
+        $mr = $this->decorateMr($row);
         $this->post($this->formatNewMrs([$mr]));
 
-        $createdAt = (int) $row[0]['created_at'];
+        $createdAt = (int) $row['created_at'];
         $lastNotify = $this->getLastNotify($createdAt);
         if ($createdAt > $lastNotify) {
             $this->setLastNotify($createdAt);
@@ -99,7 +103,7 @@ final class SlackNotifier
 
     private function getLastNotify(int $now): int
     {
-        $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'last_notify'");
+        $value = $this->syncState->get('last_notify');
         if ($value === null) {
             // First enablement: only MRs created after now are notified.
             $this->setLastNotify($now);
@@ -112,10 +116,7 @@ final class SlackNotifier
 
     private function setLastNotify(int $now): void
     {
-        $this->database->execute(
-            "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_notify', ?)",
-            [(string) $now],
-        );
+        $this->syncState->set('last_notify', (string) $now);
     }
 
     /**
@@ -123,7 +124,11 @@ final class SlackNotifier
      */
     private function newMrsSince(int $lastNotify): array
     {
-        $rows = $this->database->query('SELECT * FROM merge_requests WHERE created_at > ?', [$lastNotify]);
+        $rows = SqliteRows::list(
+            $this->connection,
+            'SELECT * FROM merge_requests WHERE created_at > ?',
+            [SqliteDateTime::toStorage($lastNotify)],
+        );
         $result = [];
         foreach ($rows as $row) {
             $result[] = $this->decorateMr($row);
@@ -138,10 +143,15 @@ final class SlackNotifier
     private function staleMrsSince(int $lastNotify, int $now): array
     {
         $staleSeconds = AppConfig::STALE_DAYS * 86400;
-        $rows = $this->database->query(
+        $rows = SqliteRows::list(
+            $this->connection,
             'SELECT * FROM merge_requests
              WHERE state = ? AND created_at > ? AND created_at <= ?',
-            ['opened', $lastNotify - $staleSeconds, $now - $staleSeconds],
+            [
+                'opened',
+                SqliteDateTime::toStorage($lastNotify - $staleSeconds),
+                SqliteDateTime::toStorage($now - $staleSeconds),
+            ],
         );
         $result = [];
         foreach ($rows as $row) {
@@ -159,9 +169,10 @@ final class SlackNotifier
     private function decorateMr(array $row): array
     {
         $authorId = (int) $row['author_id'];
-        $authorName = $this->database->queryValue('SELECT name FROM users WHERE id = ?', [$authorId]);
-        $approvals = (int) $this->database->queryValue(
-            'SELECT COUNT(*) FROM approvals WHERE mr_id = ?',
+        $authorName = SqliteRows::value($this->connection, 'SELECT name FROM users WHERE id = ?', [$authorId]);
+        $approvals = (int) SqliteRows::value(
+            $this->connection,
+            'SELECT COUNT(*) FROM approvals WHERE merge_request_id = ?',
             [(int) $row['id']],
         );
 

@@ -5,15 +5,26 @@ declare(strict_types=1);
 namespace App\Tests\Integration;
 
 use App\Config\AppConfig;
-use App\Refresh\RefreshQueue;
-use App\Refresh\RefreshWorker;
-use App\Storage\Database;
-use App\Sync\SlackNotifier;
-use App\Sync\Synchronizer;
+use App\Review\Application\Refresh\RefreshWorker;
+use App\Review\Application\Sync\Synchronizer;
+use App\Review\Infrastructure\Persistence\DbalApprovalRepository;
+use App\Review\Infrastructure\Persistence\DbalCommitRepository;
+use App\Review\Infrastructure\Persistence\DbalDiscussionRepository;
+use App\Review\Infrastructure\Persistence\DbalMergeRequestRepository;
+use App\Review\Infrastructure\Persistence\DbalPipelineRepository;
+use App\Review\Infrastructure\Persistence\DbalProjectRepository;
+use App\Review\Infrastructure\Persistence\DbalUserRepository;
+use App\Review\Infrastructure\Persistence\RefreshQueueStore;
+use App\Review\Infrastructure\Slack\SlackNotifier;
+use App\Shared\Infrastructure\Persistence\ConnectionFactory;
+use App\Shared\Infrastructure\Persistence\SqliteDateTime;
+use App\Shared\Infrastructure\Persistence\SqliteRows;
+use App\Shared\Infrastructure\Persistence\SyncStateStore;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\FakeHub;
 use App\Tests\Support\TestAppConfig;
 use App\Tests\Support\TestSchema;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 
 use function array_column;
@@ -27,10 +38,10 @@ use function uniqid;
 final class RefreshWorkerTest extends TestCase
 {
     private AppConfig $config;
-    private Database $database;
+    private Connection $connection;
     private FakeGitLabClient $client;
     private Synchronizer $synchronizer;
-    private RefreshQueue $queue;
+    private RefreshQueueStore $queue;
     private FakeHub $hub;
     private RefreshWorker $worker;
 
@@ -40,12 +51,12 @@ final class RefreshWorkerTest extends TestCase
             sys_get_temp_dir() . '/cr-dashboard-refresh-worker-' . uniqid('', true) . '.sqlite',
         );
         $this->client = new FakeGitLabClient();
-        $this->database = new Database($this->config);
         TestSchema::migrate($this->config);
-        $this->synchronizer = new Synchronizer($this->client, $this->database, $this->config);
-        $this->queue = new RefreshQueue($this->database);
+        $this->connection = (new ConnectionFactory($this->config))->create();
+        $this->synchronizer = $this->createSynchronizer();
+        $this->queue = new RefreshQueueStore($this->connection);
         $this->hub = new FakeHub();
-        $slackNotifier = new SlackNotifier($this->database, $this->config);
+        $slackNotifier = new SlackNotifier($this->connection, new SyncStateStore($this->connection), $this->config);
         $this->worker = new RefreshWorker(
             $this->queue,
             $this->client,
@@ -82,7 +93,7 @@ final class RefreshWorkerTest extends TestCase
         self::assertTrue($this->worker->tick(1002)); // notices the queue is empty, ends the cycle
 
         self::assertFalse($this->queue->isActive());
-        self::assertSame('done', $this->database->queryValue('SELECT state FROM refresh_queue WHERE mr_id = 101'));
+        self::assertSame('done', $this->value('SELECT state FROM refresh_queue WHERE mr_id = 101'));
 
         $doneEvents = array_values(array_filter(
             $this->hub->published,
@@ -130,15 +141,15 @@ final class RefreshWorkerTest extends TestCase
 
         self::assertSame(
             2,
-            (int) $this->database->queryValue('SELECT COUNT(*) FROM refresh_queue'),
+            (int) $this->value('SELECT COUNT(*) FROM refresh_queue'),
         );
 
         while ($this->queue->isActive()) {
             $this->worker->tick(1001);
         }
 
-        self::assertSame('done', $this->database->queryValue('SELECT state FROM refresh_queue WHERE mr_id = 101'));
-        self::assertSame('done', $this->database->queryValue('SELECT state FROM refresh_queue WHERE mr_id = 102'));
+        self::assertSame('done', $this->value('SELECT state FROM refresh_queue WHERE mr_id = 101'));
+        self::assertSame('done', $this->value('SELECT state FROM refresh_queue WHERE mr_id = 102'));
 
         $doneIds = array_column(
             array_values(array_filter(
@@ -162,7 +173,7 @@ final class RefreshWorkerTest extends TestCase
         $this->worker->tick($now);
 
         $queuedIds = array_column(
-            $this->database->query('SELECT mr_id FROM refresh_queue'),
+            $this->rows('SELECT mr_id FROM refresh_queue'),
             'mr_id',
         );
         self::assertContains(101, $queuedIds);
@@ -231,17 +242,42 @@ final class RefreshWorkerTest extends TestCase
         self::assertSame(4, $progress[array_key_last($progress)]['requests_done']);
     }
 
+    private function createSynchronizer(): Synchronizer
+    {
+        return new Synchronizer(
+            $this->client,
+            new DbalMergeRequestRepository($this->connection),
+            new DbalUserRepository($this->connection),
+            new DbalProjectRepository($this->connection),
+            new DbalApprovalRepository($this->connection),
+            new DbalDiscussionRepository($this->connection),
+            new DbalCommitRepository($this->connection),
+            new DbalPipelineRepository($this->connection),
+            new SyncStateStore($this->connection),
+            $this->connection,
+            $this->config,
+        );
+    }
+
     private function seedCachedMr(int $id, int $authorId, string $updated): void
     {
-        $this->database->execute(
+        $updatedEpoch = (int) strtotime($updated);
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url) VALUES (?, ?, ?, NULL)',
             [$authorId, 'User ' . $authorId, 'user' . $authorId],
         );
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO merge_requests
                 (id, iid, project_id, author_id, title, state, created_at, updated_at, web_url)
              VALUES (?, ?, 1, ?, ?, \'opened\', ?, ?, \'\')',
-            [$id, $id, $authorId, 'MR ' . $id, (int) strtotime($updated), (int) strtotime($updated)],
+            [
+                $id,
+                $id,
+                $authorId,
+                'MR ' . $id,
+                SqliteDateTime::toStorage($updatedEpoch),
+                SqliteDateTime::toStorage($updatedEpoch),
+            ],
         );
     }
 
@@ -276,6 +312,24 @@ final class RefreshWorkerTest extends TestCase
 
     private function rowCount(string $sql): int
     {
-        return (int) $this->database->queryValue($sql);
+        return (int) $this->value($sql);
+    }
+
+    /**
+     * @param list<int|float|string|null> $params
+     *
+     * @return list<array<string, int|float|string|null>>
+     */
+    private function rows(string $sql, array $params = []): array
+    {
+        return SqliteRows::list($this->connection, $sql, $params);
+    }
+
+    /**
+     * @param list<int|float|string|null> $params
+     */
+    private function value(string $sql, array $params = []): null|int|float|string
+    {
+        return SqliteRows::value($this->connection, $sql, $params);
     }
 }

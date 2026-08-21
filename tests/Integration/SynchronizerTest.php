@@ -5,13 +5,24 @@ declare(strict_types=1);
 namespace App\Tests\Integration;
 
 use App\Config\AppConfig;
-use App\GitLab\GitLabException;
-use App\Storage\Database;
-use App\Sync\Synchronizer;
-use App\Sync\SyncLockedException;
+use App\Review\Application\Sync\Synchronizer;
+use App\Review\Application\Sync\SyncLockedException;
+use App\Review\Infrastructure\GitLab\GitLabException;
+use App\Review\Infrastructure\Persistence\DbalApprovalRepository;
+use App\Review\Infrastructure\Persistence\DbalCommitRepository;
+use App\Review\Infrastructure\Persistence\DbalDiscussionRepository;
+use App\Review\Infrastructure\Persistence\DbalMergeRequestRepository;
+use App\Review\Infrastructure\Persistence\DbalPipelineRepository;
+use App\Review\Infrastructure\Persistence\DbalProjectRepository;
+use App\Review\Infrastructure\Persistence\DbalUserRepository;
+use App\Shared\Infrastructure\Persistence\ConnectionFactory;
+use App\Shared\Infrastructure\Persistence\SqliteDateTime;
+use App\Shared\Infrastructure\Persistence\SqliteRows;
+use App\Shared\Infrastructure\Persistence\SyncStateStore;
 use App\Tests\Support\FakeGitLabClient;
 use App\Tests\Support\TestAppConfig;
 use App\Tests\Support\TestSchema;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 
 use function array_merge;
@@ -24,7 +35,7 @@ use function unlink;
 final class SynchronizerTest extends TestCase
 {
     private AppConfig $config;
-    private Database $database;
+    private Connection $connection;
     private FakeGitLabClient $client;
     private Synchronizer $synchronizer;
 
@@ -34,9 +45,9 @@ final class SynchronizerTest extends TestCase
             sys_get_temp_dir() . '/cr-dashboard-sync-' . uniqid('', true) . '.sqlite',
         );
         $this->client = new FakeGitLabClient();
-        $this->database = new Database($this->config);
         TestSchema::migrate($this->config);
-        $this->synchronizer = new Synchronizer($this->client, $this->database, $this->config);
+        $this->connection = (new ConnectionFactory($this->config))->create();
+        $this->synchronizer = $this->createSynchronizer($this->config);
     }
 
     public function testFullSyncStoresMrAndSubResources(): void
@@ -86,27 +97,28 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $mrs = $this->database->query('SELECT * FROM merge_requests');
+        $mrs = $this->rows('SELECT * FROM merge_requests');
         self::assertCount(1, $mrs);
         self::assertSame('opened', $mrs[0]['state']);
-        self::assertSame((int) strtotime('2026-08-01T09:00:00+00:00'), $mrs[0]['created_at']);
+        $createdAt = SqliteDateTime::fromStorage($mrs[0]['created_at']);
+        self::assertSame((int) strtotime('2026-08-01T09:00:00+00:00'), $createdAt);
         self::assertSame(1, $this->rowCount('approvals'));
         self::assertSame(1, $this->rowCount('discussions'));
         self::assertSame(1, $this->rowCount('pipelines'));
         self::assertSame(1, $this->rowCount('commits'));
 
-        $commit = $this->database->query('SELECT * FROM commits WHERE mr_id = 101')[0];
+        $commit = $this->rows('SELECT * FROM commits WHERE merge_request_id = 101')[0];
         self::assertSame('shaA', $commit['sha']);
         self::assertSame(5, $commit['additions']);
         self::assertSame(2, $commit['deletions']);
         self::assertSame(1, $commit['current']);
 
-        $project = $this->database->query('SELECT path_with_namespace, name, avatar_url FROM projects WHERE id = 1')[0];
+        $project = $this->rows('SELECT path_with_namespace, name, avatar_url FROM projects WHERE id = 1')[0];
         self::assertSame('group/proj', $project['path_with_namespace']);
         self::assertSame('Proj', $project['name']);
         self::assertSame('https://gitlab.example.test/uploads/proj/avatar.png', $project['avatar_url']);
 
-        self::assertSame(1, $this->database->queryValue('SELECT COUNT(*) FROM users WHERE id = 1'));
+        self::assertSame(1, $this->value('SELECT COUNT(*) FROM users WHERE id = 1'));
         self::assertNotNull($this->synchronizer->lastSync());
     }
 
@@ -120,7 +132,7 @@ final class SynchronizerTest extends TestCase
         ];
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $stored = $this->database->query('SELECT labels FROM merge_requests WHERE id = 101');
+        $stored = $this->rows('SELECT labels FROM merge_requests WHERE id = 101');
         self::assertSame('["frontend","urgent"]', $stored[0]['labels']);
     }
 
@@ -133,7 +145,7 @@ final class SynchronizerTest extends TestCase
         $this->seedSingleMrWithApprovals([3]);
         $this->synchronizer->full((int) strtotime('2026-08-10T12:30:00+00:00'));
 
-        $approvals = $this->database->query('SELECT user_id FROM approvals ORDER BY user_id');
+        $approvals = $this->rows('SELECT user_id FROM approvals ORDER BY user_id');
         self::assertCount(1, $approvals);
         self::assertSame(3, $approvals[0]['user_id']);
     }
@@ -165,7 +177,7 @@ final class SynchronizerTest extends TestCase
 
         self::assertSame(2, $this->rowCount('commits'));
         self::assertSame(2, $this->client->commitStatsCalls);
-        $shas = $this->database->query('SELECT sha, current FROM commits ORDER BY sha');
+        $shas = $this->rows('SELECT sha, current FROM commits ORDER BY sha');
         self::assertSame(['shaA' => 1, 'shaB' => 1], $this->currentFlags($shas));
 
         // shaA is force-pushed away.
@@ -174,7 +186,7 @@ final class SynchronizerTest extends TestCase
         ];
         $this->synchronizer->full((int) strtotime('2026-08-10T14:00:00+00:00'));
 
-        $shas = $this->database->query('SELECT sha, current FROM commits ORDER BY sha');
+        $shas = $this->rows('SELECT sha, current FROM commits ORDER BY sha');
         self::assertSame(['shaA' => 0, 'shaB' => 1], $this->currentFlags($shas));
         self::assertSame(2, $this->client->commitStatsCalls, 'stats are never re-fetched for known shas');
     }
@@ -189,7 +201,7 @@ final class SynchronizerTest extends TestCase
         ];
         $this->client->commitStatsBySha['shaA'] = ['stats' => ['additions' => 7, 'deletions' => 3]];
         // GitLab can return the same sha more than once (pagination overlap,
-        // merge history); a plain INSERT would hit the UNIQUE (mr_id, sha)
+        // merge history); a plain INSERT would hit the UNIQUE (merge_request_id, sha)
         // constraint on the second occurrence.
         $this->client->commitsByIid[101] = [
             ['id' => 'shaA', 'title' => 'a', 'committed_date' => '2026-08-01T10:30:00+00:00'],
@@ -198,7 +210,7 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $commits = $this->database->query('SELECT sha, additions, deletions, current FROM commits WHERE mr_id = 101');
+        $commits = $this->rows('SELECT sha, additions, deletions, current FROM commits WHERE merge_request_id = 101');
         self::assertCount(1, $commits, 'duplicate sha is stored once');
         self::assertSame(7, $commits[0]['additions']);
         self::assertSame(3, $commits[0]['deletions']);
@@ -220,7 +232,7 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $mrs = $this->database->query('SELECT id, state FROM merge_requests');
+        $mrs = $this->rows('SELECT id, state FROM merge_requests');
         self::assertCount(1, $mrs);
         self::assertSame(101, $mrs[0]['id']);
         self::assertSame('opened', $mrs[0]['state']);
@@ -281,7 +293,7 @@ final class SynchronizerTest extends TestCase
         $this->synchronizer->incremental((int) strtotime('2026-08-10T12:15:00+00:00'));
 
         self::assertSame(2, $this->client->jobsCalls);
-        $job = $this->database->query('SELECT status FROM jobs WHERE id = 1')[0];
+        $job = $this->rows('SELECT status FROM jobs WHERE id = 1')[0];
         self::assertSame('failed', $job['status']);
     }
 
@@ -341,7 +353,7 @@ final class SynchronizerTest extends TestCase
 
     public function testSyncLockBlocksConcurrentSync(): void
     {
-        $this->database->execute(
+        $this->connection->executeStatement(
             "INSERT INTO sync_state (key, value) VALUES ('sync_lock', ?)",
             [(string) strtotime('2026-08-10T12:00:00+00:00')],
         );
@@ -354,7 +366,7 @@ final class SynchronizerTest extends TestCase
     public function testStaleSyncLockCanBeTakenOver(): void
     {
         $now = (int) strtotime('2026-08-10T12:00:00+00:00');
-        $this->database->execute(
+        $this->connection->executeStatement(
             "INSERT INTO sync_state (key, value) VALUES ('sync_lock', ?)",
             [(string) ($now - 3600)],
         );
@@ -369,13 +381,13 @@ final class SynchronizerTest extends TestCase
         $this->synchronizer->full($now);
 
         self::assertSame(1, $this->rowCount('merge_requests'));
-        self::assertNull($this->database->queryValue("SELECT value FROM sync_state WHERE key = 'sync_lock'"));
+        self::assertNull(SqliteRows::value($this->connection, "SELECT value FROM sync_state WHERE key = 'sync_lock'"));
     }
 
     public function testProjectAllowlistRestrictsSyncedMrs(): void
     {
-        $this->config = TestAppConfig::create($this->config->databasePath, ['gitlabProjects' => ['group/proj']]);
-        $this->synchronizer = new Synchronizer($this->client, $this->database, $this->config);
+        $config = TestAppConfig::create($this->config->databasePath, ['gitlabProjects' => ['group/proj']]);
+        $this->synchronizer = $this->createSynchronizer($config);
 
         $allowedMr = $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00', null, 1);
         $blockedMr = $this->mr(202, 'opened', '2026-08-02T09:00:00+00:00', null, 1);
@@ -388,7 +400,7 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $stored = $this->database->query('SELECT iid FROM merge_requests');
+        $stored = $this->rows('SELECT iid FROM merge_requests');
         self::assertCount(1, $stored);
         self::assertSame(101, $stored[0]['iid']);
     }
@@ -407,7 +419,7 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $mr = $this->database->query('SELECT merge_status, has_conflicts FROM merge_requests WHERE id = 101')[0];
+        $mr = $this->rows('SELECT merge_status, has_conflicts FROM merge_requests WHERE id = 101')[0];
         self::assertSame('cannot_be_merged', $mr['merge_status']);
         self::assertSame(1, $mr['has_conflicts']);
     }
@@ -447,7 +459,7 @@ final class SynchronizerTest extends TestCase
 
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        $resolved = $this->database->query('SELECT user_id, resolved FROM discussions ORDER BY user_id');
+        $resolved = $this->rows('SELECT user_id, resolved FROM discussions ORDER BY user_id');
         self::assertSame(2, $resolved[0]['user_id']);
         self::assertSame(0, $resolved[0]['resolved']);
         self::assertSame(3, $resolved[1]['user_id']);
@@ -458,7 +470,7 @@ final class SynchronizerTest extends TestCase
     {
         // A pre-ranked user (mr_count = 5) is re-touched by a sync that re-stores it.
         // The UPSERT must refresh name/username/avatar but leave the rank intact.
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (1, ?, ?, NULL, 5)',
             ['User 1', 'user1'],
         );
@@ -466,21 +478,21 @@ final class SynchronizerTest extends TestCase
         $this->seedSingleMrWithApprovals([2]);
         $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
 
-        self::assertSame(5, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 1'));
+        self::assertSame(5, $this->value('SELECT mr_count FROM users WHERE id = 1'));
     }
 
     public function testRankUsersUpdatesCountsAndIsBestEffort(): void
     {
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (1, ?, ?, NULL, 0)',
             ['Alice', 'alice'],
         );
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (2, ?, ?, NULL, 0)',
             ['Bob', 'bob'],
         );
         // User 3 already has a count; GitLab will fail for it, so the count must stay.
-        $this->database->execute(
+        $this->connection->executeStatement(
             'INSERT INTO users (id, name, username, avatar_url, mr_count) VALUES (3, ?, ?, NULL, 9)',
             ['Carol', 'carol'],
         );
@@ -491,10 +503,10 @@ final class SynchronizerTest extends TestCase
         $now = (int) strtotime('2026-08-10T12:00:00+00:00');
         $this->synchronizer->rankUsers($now);
 
-        self::assertSame(7, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 1'));
-        self::assertSame(3, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 2'));
-        self::assertSame(9, $this->database->queryValue('SELECT mr_count FROM users WHERE id = 3'));
-        self::assertSame($now, $this->database->queryValue("SELECT ranked_at FROM users WHERE id = 1"));
+        self::assertSame(7, $this->value('SELECT mr_count FROM users WHERE id = 1'));
+        self::assertSame(3, $this->value('SELECT mr_count FROM users WHERE id = 2'));
+        self::assertSame(9, $this->value('SELECT mr_count FROM users WHERE id = 3'));
+        self::assertSame($now, SqliteDateTime::fromStorage($this->value('SELECT ranked_at FROM users WHERE id = 1')));
         self::assertSame($now, $this->synchronizer->lastRank());
         self::assertSame(3, $this->client->authorMergeRequestCountCalls);
     }
@@ -512,6 +524,23 @@ final class SynchronizerTest extends TestCase
                 unlink($path);
             }
         }
+    }
+
+    private function createSynchronizer(AppConfig $config): Synchronizer
+    {
+        return new Synchronizer(
+            $this->client,
+            new DbalMergeRequestRepository($this->connection),
+            new DbalUserRepository($this->connection),
+            new DbalProjectRepository($this->connection),
+            new DbalApprovalRepository($this->connection),
+            new DbalDiscussionRepository($this->connection),
+            new DbalCommitRepository($this->connection),
+            new DbalPipelineRepository($this->connection),
+            new SyncStateStore($this->connection),
+            $this->connection,
+            $config,
+        );
     }
 
     /**
@@ -572,7 +601,25 @@ final class SynchronizerTest extends TestCase
 
     private function rowCount(string $table): int
     {
-        return (int) $this->database->queryValue('SELECT COUNT(*) FROM ' . $table);
+        return (int) SqliteRows::value($this->connection, 'SELECT COUNT(*) FROM ' . $table);
+    }
+
+    /**
+     * @param list<int|float|string|null> $params
+     *
+     * @return list<array<string, int|float|string|null>>
+     */
+    private function rows(string $sql, array $params = []): array
+    {
+        return SqliteRows::list($this->connection, $sql, $params);
+    }
+
+    /**
+     * @param list<int|float|string|null> $params
+     */
+    private function value(string $sql, array $params = []): null|int|float|string
+    {
+        return SqliteRows::value($this->connection, $sql, $params);
     }
 
     /**

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Unit;
 
-use App\Mercure\HmacTokenProvider;
+use App\Review\Infrastructure\Mercure\HmacTokenProvider;
 use PHPUnit\Framework\TestCase;
 
 use function base64_decode;

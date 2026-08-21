@@ -2,12 +2,20 @@
 
 declare(strict_types=1);
 
-namespace App\Sync;
+namespace App\Review\Application\Sync;
 
 use App\Config\AppConfig;
-use App\GitLab\GitLabClientInterface;
-use App\GitLab\GitLabException;
-use App\Storage\Database;
+use App\Review\Domain\Approval\ApprovalRepository;
+use App\Review\Domain\Commit\CommitRepository;
+use App\Review\Domain\Discussion\DiscussionRepository;
+use App\Review\Domain\MergeRequest\MergeRequestRepository;
+use App\Review\Domain\Pipeline\PipelineRepository;
+use App\Review\Domain\Project\ProjectRepository;
+use App\Review\Domain\User\UserRepository;
+use App\Review\Infrastructure\GitLab\GitLabClientInterface;
+use App\Review\Infrastructure\GitLab\GitLabException;
+use App\Shared\Infrastructure\Persistence\SyncStateStore;
+use Doctrine\DBAL\Connection;
 use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
@@ -41,14 +49,22 @@ final class Synchronizer
 
     public function __construct(
         private readonly GitLabClientInterface $client,
-        private readonly Database $database,
+        private readonly MergeRequestRepository $mergeRequests,
+        private readonly UserRepository $users,
+        private readonly ProjectRepository $projects,
+        private readonly ApprovalRepository $approvals,
+        private readonly DiscussionRepository $discussions,
+        private readonly CommitRepository $commits,
+        private readonly PipelineRepository $pipelines,
+        private readonly SyncStateStore $syncState,
+        private readonly Connection $connection,
         private readonly AppConfig $config,
     ) {
     }
 
     public function lastSync(): null|int
     {
-        $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'last_sync'");
+        $value = $this->syncState->get('last_sync');
 
         return $value === null ? null : (int) $value;
     }
@@ -58,7 +74,7 @@ final class Synchronizer
      */
     public function lastRank(): null|int
     {
-        $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'last_rank_at'");
+        $value = $this->syncState->get('last_rank_at');
 
         return $value === null ? null : (int) $value;
     }
@@ -74,15 +90,14 @@ final class Synchronizer
     {
         $this->output = $output;
 
-        $rows = $this->database->query('SELECT id FROM users');
-        $total = count($rows);
+        $ids = $this->users->allIds();
+        $total = count($ids);
         $this->report(sprintf('Ranking users: fetching all-time MR counts for %d user(s)...', $total));
 
         $succeeded = 0;
         $failed = 0;
         $updates = [];
-        foreach ($rows as $row) {
-            $id = (int) $row['id'];
+        foreach ($ids as $id) {
             try {
                 $count = $this->client->authorMergeRequestCount($id);
             } catch (GitLabException $e) {
@@ -96,18 +111,15 @@ final class Synchronizer
             $succeeded++;
         }
 
-        $this->database->begin();
+        $this->connection->beginTransaction();
         try {
             foreach ($updates as [$id, $count]) {
-                $this->database->execute(
-                    'UPDATE users SET mr_count = ?, ranked_at = ? WHERE id = ?',
-                    [$count, $now, $id],
-                );
+                $this->users->updateRank($id, $count, $now);
             }
-            $this->setSyncState('last_rank_at', (string) $now);
-            $this->database->commit();
+            $this->syncState->set('last_rank_at', (string) $now);
+            $this->connection->commit();
         } catch (Throwable $e) {
-            $this->database->rollback();
+            $this->connection->rollBack();
             throw $e;
         }
 
@@ -176,7 +188,7 @@ final class Synchronizer
 
             $dropped = $this->reconcileMrs($fetchedIds);
             $this->report(sprintf('Reconciled: dropped %d MR(s) no longer open or recently merged.', $dropped));
-            $this->setSyncState('last_sync', (string) $now);
+            $this->syncState->set('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
         }
@@ -232,7 +244,7 @@ final class Synchronizer
                 $this->reportMrProgress($done, $total, $mr, $projectsById);
             }
 
-            $runningIds = $this->runningPipelineMrIds();
+            $runningIds = $this->pipelines->runningPipelineMrIds();
             $runningCount = count($runningIds);
             $this->report(sprintf('  synced %d/%d; re-polling %d running pipeline(s)', $done, $total, $runningCount));
             $polled = 0;
@@ -240,7 +252,7 @@ final class Synchronizer
                 if (in_array($mrId, $syncedIds, true)) {
                     continue;
                 }
-                $row = $this->mergeRequestRow($mrId);
+                $row = $this->mergeRequests->findById($mrId);
                 if ($row !== null) {
                     $this->syncPipelinesOnly($row);
                     $polled++;
@@ -248,7 +260,7 @@ final class Synchronizer
             }
 
             $this->report(sprintf('  re-polled %d MR(s).', $polled));
-            $this->setSyncState('last_sync', (string) $now);
+            $this->syncState->set('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
         }
@@ -291,7 +303,7 @@ final class Synchronizer
 
             $pruned = $this->applyRetention($now);
             $this->report(sprintf('Retention pruned %d MR(s).', $pruned));
-            $this->setSyncState('last_sync', (string) $now);
+            $this->syncState->set('last_sync', (string) $now);
         } finally {
             $this->releaseLock();
         }
@@ -307,8 +319,8 @@ final class Synchronizer
     public function cachedProjectIds(): array
     {
         $ids = [];
-        foreach ($this->database->query('SELECT id FROM projects') as $row) {
-            $ids[(int) $row['id']] = true;
+        foreach ($this->projects->allIds() as $id) {
+            $ids[$id] = true;
         }
 
         return $ids;
@@ -325,29 +337,12 @@ final class Synchronizer
      */
     public function openMergeRequestRefs(int $now): array
     {
-        $staleCutoff = $now - (AppConfig::STALE_DAYS * 86400);
-        $rows = $this->database->query(
-            "SELECT id, project_id, iid, author_id FROM merge_requests
-             WHERE state = 'opened' AND created_at > ?",
-            [$staleCutoff],
-        );
-
-        $refs = [];
-        foreach ($rows as $row) {
-            $refs[] = [
-                'id' => (int) $row['id'],
-                'project_id' => (int) $row['project_id'],
-                'iid' => (int) $row['iid'],
-                'author_id' => (int) $row['author_id'],
-            ];
-        }
-
-        return $refs;
+        return $this->mergeRequests->openRefsCreatedAfter($now - (AppConfig::STALE_DAYS * 86400));
     }
 
     public function isMergeRequestCached(int $id): bool
     {
-        return $this->database->queryValue('SELECT id FROM merge_requests WHERE id = ?', [$id]) !== null;
+        return $this->mergeRequests->isCached($id);
     }
 
     /**
@@ -366,17 +361,7 @@ final class Synchronizer
     public function applyRetention(int $now): int
     {
         $cutoff = $now - ($this->config->retentionDays * 86400);
-        $rows = $this->database->query(
-            'SELECT id FROM merge_requests
-             WHERE state IN ("merged", "closed")
-               AND COALESCE(merged_at, closed_at) < ?',
-            [$cutoff],
-        );
-
-        $ids = [];
-        foreach ($rows as $row) {
-            $ids[] = (int) $row['id'];
-        }
+        $ids = $this->mergeRequests->retentionIdsBefore($cutoff);
         foreach ($ids as $id) {
             $this->deleteMergeRequest($id);
         }
@@ -386,11 +371,12 @@ final class Synchronizer
 
     /**
      * Same sub-resource fetch as {@see syncMergeRequest()}, but reports
-     * progress after each step for the refresh worker (`App\Refresh\RefreshWorker`)
-     * to publish as Mercure events. `requests_expected` starts at 4 (one call
-     * per sub-resource) and is corrected once pipelines/commits are known:
-     * +1 per running/pending pipeline (a jobs call) and +1 per not-yet-cached
-     * commit sha (a commit-stats call).
+     * progress after each step for the refresh worker
+     * (`App\Review\Application\Refresh\RefreshWorker`) to publish as Mercure
+     * events. `requests_expected` starts at 4 (one call per sub-resource) and
+     * is corrected once pipelines/commits are known: +1 per running/pending
+     * pipeline (a jobs call) and +1 per not-yet-cached commit sha (a
+     * commit-stats call).
      *
      * @param array<array-key, mixed> $mr
      * @param callable(int $requestsDone, int $requestsExpected): void $onProgress
@@ -480,11 +466,7 @@ final class Synchronizer
             }
             $seen[$sha] = true;
 
-            $existing = $this->database->queryValue(
-                'SELECT id FROM commits WHERE mr_id = ? AND sha = ?',
-                [$mrId, $sha],
-            );
-            if ($existing === null) {
+            if (!$this->commits->isCached($mrId, $sha)) {
                 $count++;
             }
         }
@@ -516,7 +498,7 @@ final class Synchronizer
         if ($authorId !== 0) {
             $author = $mr['author'] ?? null;
             if (is_array($author)) {
-                $this->storeUser($author);
+                $this->users->upsert($this->normalizeUser($author));
             }
         }
 
@@ -528,31 +510,24 @@ final class Synchronizer
         $state = $this->stringValue($mr, 'state');
         $state = $state === 'locked' ? 'closed' : $state;
 
-        $this->database->execute(
-            'INSERT OR REPLACE INTO merge_requests (
-                id, iid, project_id, title, description, author_id, state, draft,
-                created_at, merged_at, closed_at, updated_at, web_url,
-                merge_status, has_conflicts, labels
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [
-                $this->intValue($mr, 'id'),
-                $this->intValue($mr, 'iid'),
-                $this->intValue($mr, 'project_id'),
-                $this->stringValue($mr, 'title'),
-                $this->nullableStringValue($mr, 'description'),
-                $authorId,
-                $state,
-                $this->boolValue($mr, 'draft') ? 1 : 0,
-                $created,
-                $this->parseTime($mr['merged_at'] ?? null),
-                $this->parseTime($mr['closed_at'] ?? null),
-                $updated,
-                $this->nullableStringValue($mr, 'web_url'),
-                $this->stringValue($mr, 'merge_status'),
-                $this->boolValue($mr, 'has_conflicts') ? 1 : 0,
-                $this->labelsJson($mr),
-            ],
-        );
+        $this->mergeRequests->upsert([
+            'id' => $this->intValue($mr, 'id'),
+            'iid' => $this->intValue($mr, 'iid'),
+            'project_id' => $this->intValue($mr, 'project_id'),
+            'title' => $this->stringValue($mr, 'title'),
+            'description' => $this->nullableStringValue($mr, 'description'),
+            'author_id' => $authorId,
+            'state' => $state,
+            'draft' => $this->boolValue($mr, 'draft') ? 1 : 0,
+            'created_at' => $created,
+            'merged_at' => $this->parseTime($mr['merged_at'] ?? null),
+            'closed_at' => $this->parseTime($mr['closed_at'] ?? null),
+            'updated_at' => $updated,
+            'web_url' => $this->nullableStringValue($mr, 'web_url'),
+            'merge_status' => $this->stringValue($mr, 'merge_status'),
+            'has_conflicts' => $this->boolValue($mr, 'has_conflicts') ? 1 : 0,
+            'labels' => $this->labelsJson($mr),
+        ]);
     }
 
     /**
@@ -588,13 +563,14 @@ final class Synchronizer
      */
     private function storeApprovals(int $mrId, array $payload): void
     {
-        $this->database->execute('DELETE FROM approvals WHERE mr_id = ?', [$mrId]);
-
         $approvedBy = $payload['approved_by'] ?? [];
         if (!is_array($approvedBy)) {
+            $this->approvals->replaceForMergeRequest($mrId, []);
+
             return;
         }
 
+        $approvals = [];
         foreach ($approvedBy as $entry) {
             if (!is_array($entry)) {
                 continue;
@@ -609,12 +585,11 @@ final class Synchronizer
                 continue;
             }
 
-            $this->storeUser($user);
-            $this->database->execute(
-                'INSERT INTO approvals (mr_id, user_id, created_at) VALUES (?, ?, ?)',
-                [$mrId, $userId, $approvedAt],
-            );
+            $this->users->upsert($this->normalizeUser($user));
+            $approvals[] = ['user_id' => $userId, 'created_at' => $approvedAt];
         }
+
+        $this->approvals->replaceForMergeRequest($mrId, $approvals);
     }
 
     /**
@@ -627,8 +602,7 @@ final class Synchronizer
      */
     private function storeDiscussions(int $mrId, int $authorId, array $discussions): void
     {
-        $this->database->execute('DELETE FROM discussions WHERE mr_id = ?', [$mrId]);
-
+        $rows = [];
         foreach ($discussions as $discussion) {
             if (!is_array($discussion)) {
                 continue;
@@ -638,13 +612,13 @@ final class Synchronizer
                 continue;
             }
 
-            $resolved = 1;
+            $resolved = true;
             foreach ($notes as $note) {
                 if (!is_array($note)) {
                     continue;
                 }
                 if (($note['resolvable'] ?? false) === true && ($note['resolved'] ?? false) === false) {
-                    $resolved = 0;
+                    $resolved = false;
                     break;
                 }
             }
@@ -669,14 +643,13 @@ final class Synchronizer
                     continue;
                 }
 
-                $this->storeUser($author);
-                $this->database->execute(
-                    'INSERT INTO discussions (mr_id, user_id, created_at, resolved) VALUES (?, ?, ?, ?)',
-                    [$mrId, $userId, $createdAt, $resolved],
-                );
+                $this->users->upsert($this->normalizeUser($author));
+                $rows[] = ['user_id' => $userId, 'created_at' => $createdAt, 'resolved' => $resolved];
                 break;
             }
         }
+
+        $this->discussions->replaceForMergeRequest($mrId, $rows);
     }
 
     /**
@@ -684,8 +657,8 @@ final class Synchronizer
      */
     private function storePipelinesAndJobs(int $mrId, int $projectId, array $pipelines): void
     {
-        $this->database->execute('DELETE FROM pipelines WHERE mr_id = ?', [$mrId]);
-        $this->database->execute('DELETE FROM jobs WHERE mr_id = ?', [$mrId]);
+        $this->pipelines->deleteByMergeRequest($mrId);
+        $this->pipelines->deleteJobsByMr($mrId);
 
         usort(
             $pipelines,
@@ -702,16 +675,13 @@ final class Synchronizer
             }
             $status = $this->stringValue($pipeline, 'status');
 
-            $this->database->execute(
-                'INSERT OR REPLACE INTO pipelines (id, mr_id, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-                [
-                    $pipelineId,
-                    $mrId,
-                    $status,
-                    $this->parseTime($pipeline['created_at'] ?? null),
-                    $this->parseTime($pipeline['updated_at'] ?? null),
-                ],
-            );
+            $this->pipelines->upsertPipeline([
+                'id' => $pipelineId,
+                'merge_request_id' => $mrId,
+                'status' => $status,
+                'created_at' => $this->parseTime($pipeline['created_at'] ?? null),
+                'updated_at' => $this->parseTime($pipeline['updated_at'] ?? null),
+            ]);
 
             if ($status === 'running' || $status === 'pending') {
                 $this->storeJobs($mrId, $projectId, $pipelineId);
@@ -730,10 +700,12 @@ final class Synchronizer
                 continue;
             }
 
-            $this->database->execute(
-                'INSERT OR REPLACE INTO jobs (id, pipeline_id, mr_id, status) VALUES (?, ?, ?, ?)',
-                [$jobId, $pipelineId, $mrId, $this->stringValue($job, 'status')],
-            );
+            $this->pipelines->upsertJob([
+                'id' => $jobId,
+                'pipeline_id' => $pipelineId,
+                'merge_request_id' => $mrId,
+                'status' => $this->stringValue($job, 'status'),
+            ]);
         }
     }
 
@@ -741,18 +713,11 @@ final class Synchronizer
      * Append-only by (mr_id, sha): new shas insert with stats fetched once,
      * existing shas are re-marked `current`.
      *
-     * The write is an upsert rather than a SELECT-then-INSERT/UPDATE: GitLab's
-     * commits response can return the same sha more than once (pagination
-     * overlap, merge history), and a plain INSERT then throws on the
-     * UNIQUE (mr_id, sha) constraint. ON CONFLICT keeps the cached stats —
-     * they are immutable and fetched only once per sha — and just refreshes
-     * the `current` flag, message and date.
-     *
      * @param list<array<string, mixed>> $commits
      */
     private function storeCommits(int $mrId, int $projectId, array $commits): void
     {
-        $this->database->execute('UPDATE commits SET current = 0 WHERE mr_id = ?', [$mrId]);
+        $this->commits->markAllNonCurrent($mrId);
 
         $seen = [];
         foreach ($commits as $commit) {
@@ -768,29 +733,21 @@ final class Synchronizer
             $message = $this->stringValue($commit, 'title');
             $committedAt = $this->parseTime($commit['committed_date'] ?? null);
 
-            $existing = $this->database->queryValue(
-                'SELECT id FROM commits WHERE mr_id = ? AND sha = ?',
-                [$mrId, $sha],
-            );
-
-            if ($existing === null) {
+            if ($this->commits->isCached($mrId, $sha)) {
+                $additions = null;
+                $deletions = null;
+            } else {
                 $stats = $this->fetchCommitStats($projectId, $sha);
                 $additions = $stats['additions'];
                 $deletions = $stats['deletions'];
-            } else {
-                $additions = null;
-                $deletions = null;
             }
 
-            $this->database->execute(
-                'INSERT INTO commits (mr_id, sha, message, committed_date, current, additions, deletions)
-                 VALUES (?, ?, ?, ?, 1, ?, ?)
-                 ON CONFLICT(mr_id, sha) DO UPDATE SET
-                    current = 1,
-                    message = excluded.message,
-                    committed_date = excluded.committed_date',
-                [$mrId, $sha, $message, $committedAt, $additions, $deletions],
-            );
+            $this->commits->upsert($mrId, $sha, [
+                'message' => $message,
+                'committed_date' => $committedAt,
+                'additions' => $additions,
+                'deletions' => $deletions,
+            ]);
         }
     }
 
@@ -838,16 +795,12 @@ final class Synchronizer
             }
 
             $projectsById[$id] = $path;
-            $this->database->execute(
-                'INSERT OR REPLACE INTO projects (id, path_with_namespace, name, avatar_url)
-                 VALUES (?, ?, ?, ?)',
-                [
-                    $id,
-                    $path,
-                    $this->stringValue($project, 'name'),
-                    $this->nullableStringValue($project, 'avatar_url'),
-                ],
-            );
+            $this->projects->upsert([
+                'id' => $id,
+                'path_with_namespace' => $path,
+                'name' => $this->stringValue($project, 'name'),
+                'avatar_url' => $this->nullableStringValue($project, 'avatar_url'),
+            ]);
         }
 
         return $projectsById;
@@ -899,6 +852,21 @@ final class Synchronizer
     }
 
     /**
+     * @param array<array-key, mixed> $user
+     *
+     * @return array<string, int|float|string|null>
+     */
+    private function normalizeUser(array $user): array
+    {
+        return [
+            'id' => $this->intValue($user, 'id'),
+            'name' => $this->stringValue($user, 'name'),
+            'username' => $this->stringValue($user, 'username'),
+            'avatar_url' => $this->nullableStringValue($user, 'avatar_url'),
+        ];
+    }
+
+    /**
      * @param array<array-key, mixed> $mr
      */
     private function authorId(array $mr): int
@@ -911,66 +879,14 @@ final class Synchronizer
         return $this->intValue($author, 'id');
     }
 
-    /**
-     * @param array<array-key, mixed> $user
-     */
-    private function storeUser(array $user): void
-    {
-        $id = $this->intValue($user, 'id');
-        if ($id === 0) {
-            return;
-        }
-
-        $this->database->execute(
-            'INSERT INTO users (id, name, username, avatar_url) VALUES (?, ?, ?, ?)'
-            . ' ON CONFLICT(id) DO UPDATE SET name = excluded.name,'
-            . ' username = excluded.username, avatar_url = excluded.avatar_url',
-            [
-                $id,
-                $this->stringValue($user, 'name'),
-                $this->stringValue($user, 'username'),
-                $this->nullableStringValue($user, 'avatar_url'),
-            ],
-        );
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function runningPipelineMrIds(): array
-    {
-        $rows = $this->database->query(
-            'SELECT p.mr_id FROM pipelines p
-             WHERE p.status IN ("running", "pending")
-               AND p.id = (SELECT MAX(id) FROM pipelines WHERE mr_id = p.mr_id)',
-        );
-
-        $ids = [];
-        foreach ($rows as $row) {
-            $ids[] = (int) $row['mr_id'];
-        }
-
-        return $ids;
-    }
-
-    /**
-     * @return array<string, int|float|string|null>|null
-     */
-    private function mergeRequestRow(int $id): null|array
-    {
-        $rows = $this->database->query('SELECT * FROM merge_requests WHERE id = ?', [$id]);
-
-        return $rows === [] ? null : $rows[0];
-    }
-
     private function deleteMergeRequest(int $id): void
     {
-        $this->database->execute('DELETE FROM approvals WHERE mr_id = ?', [$id]);
-        $this->database->execute('DELETE FROM discussions WHERE mr_id = ?', [$id]);
-        $this->database->execute('DELETE FROM commits WHERE mr_id = ?', [$id]);
-        $this->database->execute('DELETE FROM pipelines WHERE mr_id = ?', [$id]);
-        $this->database->execute('DELETE FROM jobs WHERE mr_id = ?', [$id]);
-        $this->database->execute('DELETE FROM merge_requests WHERE id = ?', [$id]);
+        $this->approvals->replaceForMergeRequest($id, []);
+        $this->discussions->replaceForMergeRequest($id, []);
+        $this->commits->deleteByMergeRequest($id);
+        $this->pipelines->deleteByMergeRequest($id);
+        $this->pipelines->deleteJobsByMr($id);
+        $this->mergeRequests->remove($id);
     }
 
     /**
@@ -983,11 +899,10 @@ final class Synchronizer
      */
     private function reconcileMrs(array $fetchedIds): int
     {
-        $rows = $this->database->query('SELECT id FROM merge_requests');
         $deleted = 0;
-        foreach ($rows as $row) {
-            if (!array_key_exists((int) $row['id'], $fetchedIds)) {
-                $this->deleteMergeRequest((int) $row['id']);
+        foreach ($this->mergeRequests->allIds() as $id) {
+            if (!array_key_exists($id, $fetchedIds)) {
+                $this->deleteMergeRequest($id);
                 $deleted++;
             }
         }
@@ -997,20 +912,13 @@ final class Synchronizer
 
     private function acquireLock(int $now): bool
     {
-        $this->database->execute(
-            "INSERT OR IGNORE INTO sync_state (key, value) VALUES ('sync_lock', ?)",
-            [(string) $now],
-        );
-        if ($this->database->changes() === 1) {
+        if ($this->syncState->insertIfAbsent('sync_lock', (string) $now)) {
             return true;
         }
 
-        $value = $this->database->queryValue("SELECT value FROM sync_state WHERE key = 'sync_lock'");
+        $value = $this->syncState->get('sync_lock');
         if ($value !== null && $now - (int) $value > AppConfig::LOCK_TIMEOUT_SECONDS) {
-            $this->database->execute(
-                "UPDATE sync_state SET value = ? WHERE key = 'sync_lock'",
-                [(string) $now],
-            );
+            $this->syncState->set('sync_lock', (string) $now);
 
             return true;
         }
@@ -1020,7 +928,7 @@ final class Synchronizer
 
     private function releaseLock(): void
     {
-        $this->database->execute("DELETE FROM sync_state WHERE key = 'sync_lock'");
+        $this->syncState->delete('sync_lock');
     }
 
     private function report(string $message): void
@@ -1062,14 +970,6 @@ final class Synchronizer
         }
 
         return sprintf('%s !%d %s', $path, $this->intValue($mr, 'iid'), $title);
-    }
-
-    private function setSyncState(string $key, string $value): void
-    {
-        $this->database->execute(
-            'INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)',
-            [$key, $value],
-        );
     }
 
     private function parseTime(mixed $value): null|int

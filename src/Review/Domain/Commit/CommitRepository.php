@@ -27,4 +27,10 @@ interface CommitRepository
     public function upsert(int $mrId, string $sha, array $commit): void;
 
     public function isCached(int $mrId, string $sha): bool;
+
+    /**
+     * Drops every stored commit of the MR (the cache-side cascade companion to
+     * the merge-request repository's `remove`).
+     */
+    public function deleteByMergeRequest(int $mrId): void;
 }

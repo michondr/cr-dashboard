@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Metrics;
 
 use App\Config\AppConfig;
+use App\ReadModel\Dataset;
 
 use function array_key_exists;
 use function count;
@@ -462,10 +463,10 @@ final class MetricCalculator
     {
         $result = [];
         foreach ($data->approvals as $approval) {
-            $result[(int) $approval['user_id']][(int) $approval['mr_id']] = true;
+            $result[(int) $approval['user_id']][(int) $approval['merge_request_id']] = true;
         }
         foreach ($data->discussions as $discussion) {
-            $result[(int) $discussion['user_id']][(int) $discussion['mr_id']] = true;
+            $result[(int) $discussion['user_id']][(int) $discussion['merge_request_id']] = true;
         }
 
         return $result;
@@ -478,7 +479,7 @@ final class MetricCalculator
     {
         $result = [];
         foreach ($data->approvals as $approval) {
-            if ((int) $approval['mr_id'] !== $mrId) {
+            if ((int) $approval['merge_request_id'] !== $mrId) {
                 continue;
             }
 
@@ -498,7 +499,7 @@ final class MetricCalculator
     {
         $result = [];
         foreach ($data->discussions as $discussion) {
-            if ((int) $discussion['mr_id'] !== $mrId) {
+            if ((int) $discussion['merge_request_id'] !== $mrId) {
                 continue;
             }
 
@@ -518,7 +519,7 @@ final class MetricCalculator
     {
         $result = [];
         foreach ($data->commits as $commit) {
-            if ((int) $commit['mr_id'] !== $mrId) {
+            if ((int) $commit['merge_request_id'] !== $mrId) {
                 continue;
             }
 

@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
-namespace App\Metrics;
+namespace App\ReadModel;
 
 /**
- * In-memory snapshot of the SQLite cache, fed into the pure metric functions.
- * Rows are associative arrays as returned by {@see \App\Storage\Database::query()}.
+ * In-memory snapshot of the cache, fed into the pure metric functions and the
+ * API builder. Rows are the canonical read-model shape: Doctrine-native column
+ * names (`merge_request_id`, ...) with timestamps decoded back to epoch
+ * seconds, as returned by {@see DatasetRepository::load()}.
  */
 final class Dataset
 {

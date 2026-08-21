@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\Config\AppConfig;
 use App\Kernel;
-use App\Storage\Database;
+use App\Shared\Infrastructure\Persistence\ConnectionFactory;
 use App\Tests\Support\TestAppConfig;
 use App\Tests\Support\TestSchema;
+use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,7 +20,8 @@ use function unlink;
 
 final class RefreshControllerTest extends TestCase
 {
-    private Database $database;
+    private AppConfig $config;
+    private Connection $connection;
 
     protected function setUp(): void
     {
@@ -30,11 +33,11 @@ final class RefreshControllerTest extends TestCase
             }
         }
 
-        $config = TestAppConfig::create('var/test.sqlite');
-        $this->database = new Database($config);
-        TestSchema::migrate($config);
+        $this->config = TestAppConfig::create('var/test.sqlite');
+        TestSchema::migrate($this->config);
+        $this->connection = (new ConnectionFactory($this->config))->create();
         foreach (['sync_state', 'refresh_queue'] as $table) {
-            $this->database->execute('DELETE FROM ' . $table);
+            $this->connection->executeStatement('DELETE FROM ' . $table);
         }
     }
 

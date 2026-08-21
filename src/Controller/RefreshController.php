@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\Refresh\RefreshQueue;
+use App\Review\Infrastructure\Persistence\RefreshQueueStore;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
@@ -14,12 +14,13 @@ use function is_string;
 use function time;
 
 /**
- * Enqueues a refresh cycle for the SSE live-refresh worker (App\Refresh\RefreshWorker).
- * Identity is the existing "My view" user-filter selection, no auth.
+ * Enqueues a refresh cycle for the SSE live-refresh worker
+ * (App\Review\Application\Refresh\RefreshWorker). Identity is the existing
+ * "My view" user-filter selection, no auth.
  */
 final class RefreshController
 {
-    public function __construct(private readonly RefreshQueue $queue)
+    public function __construct(private readonly RefreshQueueStore $queue)
     {
     }
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Sync;
+namespace App\Review\Application\Sync;
 
 use RuntimeException;
 

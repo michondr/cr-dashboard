@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 
-namespace App\Refresh;
+namespace App\Review\Application\Refresh;
 
 use App\Config\AppConfig;
-use App\GitLab\GitLabClientInterface;
-use App\GitLab\GitLabException;
-use App\Sync\SlackNotifier;
-use App\Sync\Synchronizer;
+use App\Review\Application\Sync\Synchronizer;
+use App\Review\Infrastructure\GitLab\GitLabClientInterface;
+use App\Review\Infrastructure\GitLab\GitLabException;
+use App\Review\Infrastructure\Persistence\RefreshQueueStore;
+use App\Review\Infrastructure\Slack\SlackNotifier;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
 use Throwable;
@@ -26,8 +27,8 @@ use function json_encode;
  * so the console command can loop it and tests can step it deterministically
  * without a real event loop or sleep.
  *
- * This process owns the whole GitLab RPS budget (App\GitLab\Client's blocking
- * throttle): it is the only thing that talks to GitLab outside the cron syncs.
+ * This process owns the whole GitLab RPS budget (App\Review\Infrastructure\GitLab\Client's
+ * blocking throttle): it is the only thing that talks to GitLab outside the cron syncs.
  */
 final class RefreshWorker
 {
@@ -43,7 +44,7 @@ final class RefreshWorker
     private array $cycleCachedRefs = [];
 
     public function __construct(
-        private readonly RefreshQueue $queue,
+        private readonly RefreshQueueStore $queue,
         private readonly GitLabClientInterface $client,
         private readonly Synchronizer $synchronizer,
         private readonly SlackNotifier $slackNotifier,

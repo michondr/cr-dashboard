@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Refresh;
+namespace App\Review\Application\Refresh;
 
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;

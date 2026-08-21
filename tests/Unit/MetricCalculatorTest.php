@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Tests\Unit;
 
 use App\Metrics\Buckets;
-use App\Metrics\Dataset;
 use App\Metrics\MetricCalculator;
 use App\Metrics\MetricResult;
 use App\Metrics\Series;
+use App\ReadModel\Dataset;
 use PHPUnit\Framework\TestCase;
 
 use function array_search;
@@ -42,17 +42,17 @@ final class MetricCalculatorTest extends TestCase
                 $this->mr(104, 1, 'opened', $now - (61 * self::DAY), null, null),
             ],
             [
-                ['mr_id' => 101, 'user_id' => 2, 'created_at' => $now - (8 * self::DAY)],
-                ['mr_id' => 101, 'user_id' => 3, 'created_at' => $now - (6 * self::DAY)],
-                ['mr_id' => 102, 'user_id' => 1, 'created_at' => $now - (18 * self::DAY)],
-                ['mr_id' => 102, 'user_id' => 2, 'created_at' => $now - (17 * self::DAY)],
+                ['merge_request_id' => 101, 'user_id' => 2, 'created_at' => $now - (8 * self::DAY)],
+                ['merge_request_id' => 101, 'user_id' => 3, 'created_at' => $now - (6 * self::DAY)],
+                ['merge_request_id' => 102, 'user_id' => 1, 'created_at' => $now - (18 * self::DAY)],
+                ['merge_request_id' => 102, 'user_id' => 2, 'created_at' => $now - (17 * self::DAY)],
             ],
             [
-                ['mr_id' => 101, 'user_id' => 2, 'created_at' => $now - (9 * self::DAY)],
+                ['merge_request_id' => 101, 'user_id' => 2, 'created_at' => $now - (9 * self::DAY)],
             ],
             [
-                ['mr_id' => 103, 'sha' => 'sha1', 'current' => 1, 'additions' => 30, 'deletions' => 10],
-                ['mr_id' => 103, 'sha' => 'sha2', 'current' => 1, 'additions' => 5, 'deletions' => 5],
+                ['merge_request_id' => 103, 'sha' => 'sha1', 'current' => 1, 'additions' => 30, 'deletions' => 10],
+                ['merge_request_id' => 103, 'sha' => 'sha2', 'current' => 1, 'additions' => 5, 'deletions' => 5],
             ],
             [],
             [],
@@ -125,8 +125,8 @@ final class MetricCalculatorTest extends TestCase
             [],
             [$this->mr(101, 1, 'opened', $now - (10 * self::DAY), null, null)],
             [
-                ['mr_id' => 101, 'user_id' => 2, 'created_at' => $now - (8 * self::DAY)],
-                ['mr_id' => 101, 'user_id' => 3, 'created_at' => $now - (6 * self::DAY)],
+                ['merge_request_id' => 101, 'user_id' => 2, 'created_at' => $now - (8 * self::DAY)],
+                ['merge_request_id' => 101, 'user_id' => 3, 'created_at' => $now - (6 * self::DAY)],
             ],
             [],
             [],

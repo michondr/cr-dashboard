@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
-use App\GitLab\Client;
+use App\Review\Infrastructure\GitLab\Client;
 use App\Tests\Support\TestAppConfig;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

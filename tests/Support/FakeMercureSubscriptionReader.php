@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Support;
 
-use App\Mercure\MercureSubscriptionReaderInterface;
+use App\Review\Infrastructure\Mercure\MercureSubscriptionReaderInterface;
 
 final class FakeMercureSubscriptionReader implements MercureSubscriptionReaderInterface
 {

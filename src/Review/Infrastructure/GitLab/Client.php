@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\GitLab;
+namespace App\Review\Infrastructure\GitLab;
 
 use App\Config\AppConfig;
 use RuntimeException;
