@@ -2,11 +2,25 @@ services:
     _defaults:
         autowire: true
         autoconfigure: true
+        # Runtime DB access must use the same WAL + busy_timeout connection as
+        # the tests (ConnectionFactory). Doctrine-bundle's default sqlite
+        # connection applies none of those PRAGMAs, so concurrent writers (a
+        # full backfill vs. the refresh worker or a cron sync) fail with
+        # "database is locked" instead of waiting for the lock.
+        bind:
+            Doctrine\DBAL\Connection: '@app.dbal.connection'
 
     App\:
         resource: '../src/'
         exclude:
             - '../src/Kernel.php'
+
+    # The ConnectionFactory-owned connection: WAL journaling, a 5s busy
+    # timeout and foreign keys on. Doctrine-bundle's own default connection
+    # stays untouched for migrations/schema tooling.
+    app.dbal.connection:
+        class: Doctrine\DBAL\Connection
+        factory: ['@App\Shared\Infrastructure\Persistence\ConnectionFactory', 'create']
 
     App\Controller\:
         resource: '../src/Controller/'
