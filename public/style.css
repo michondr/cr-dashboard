@@ -756,7 +756,7 @@ body {
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid var(--bg);
-    transform: translate(-50%, -50%);
+    transform: translate(-100%, -100%);
     background: var(--panel-2);
 }
 
