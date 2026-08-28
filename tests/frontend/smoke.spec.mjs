@@ -355,6 +355,31 @@ test('my view filter splits the list into authored and awaiting review', async (
     expect(await page.locator('.mr-section').nth(1).locator('.status-stale').count()).toBe(0);
 });
 
+test('a changed event drops an MR I just approved from "awaiting my review"', async ({ page, request }) => {
+    await page.goto('/?user=2');
+    await page.waitForSelector('.mr-section');
+
+    // MR 205 (Jane Doe, no approvers yet) is waiting on John Roe's review.
+    const awaiting = page.locator('.mr-section', { hasText: 'Awaiting my review' });
+    await expect(awaiting.locator('.mr-row[data-mr-id="205"]')).toHaveCount(1);
+
+    // Approve MR 205 as user 2, then fire a changed event: the row patch
+    // carries the ?user=2 filter, the fixture answers 404 (approved by me),
+    // and the row must leave the board instead of being spliced back in.
+    const fixture = await (await request.get('/api/data')).json();
+    const mr205 = fixture.mrs.find((mr) => mr.id === 205);
+    mr205.approvers = [
+        ...(mr205.approvers || []),
+        { id: 2, name: 'John Roe', username: 'jroe', avatar_url: null, approved_at: new Date().toISOString() },
+    ];
+    await request.post('/__test/mr', { data: mr205 });
+
+    await page.waitForTimeout(300);
+    await request.post('/__test/sse', { data: { type: 'changed', mr_id: 205 } });
+
+    await expect(awaiting.locator('.mr-row[data-mr-id="205"]')).toHaveCount(0);
+});
+
 test('chart x-axis labels show dates, not bogus year numbers', async ({ page }) => {
     // Capture the text uPlot paints onto the chart canvases.
     await page.addInitScript(() => {

@@ -63,17 +63,25 @@ final class ApiBuilder
 
     /**
      * Payload for a single open MR (same shape as one element of `mrs` in the
-     * full payload), or null when the MR is not cached or not open. Serves
-     * `/api/mr/{id}` so an SSE-driven row patch does not have to fetch and
-     * rebuild the whole dataset payload.
+     * full payload), or null when the MR is not cached, not open, or hidden by
+     * the "my view" filter. Serves `/api/mr/{id}` so an SSE-driven row patch
+     * does not have to fetch and rebuild the whole dataset payload; the filter
+     * must match `buildMrs()` so a row the user approved does not get spliced
+     * back into "awaiting my review" by a `changed` event.
      *
      * @return array<string, mixed>|null
      */
-    public function buildMr(int $id, int $now): null|array
+    public function buildMr(int $id, int $now, null|int $user = null): null|array
     {
         $dataset = $this->dataset->load();
+        $approvedByUser = $user === null ? [] : $this->approverMrIdsByUser($dataset, $user);
+
         foreach ($dataset->mrs as $mr) {
-            if ((int) $mr['id'] === $id && (string) $mr['state'] === 'opened') {
+            if (
+                (int) $mr['id'] === $id
+                && (string) $mr['state'] === 'opened'
+                && $this->visibleToUser($mr, $user, $approvedByUser)
+            ) {
                 return $this->buildMrRow($mr, $this->dataset->projectInfos(), $dataset, $now);
             }
         }
@@ -142,20 +150,31 @@ final class ApiBuilder
             if ((string) $mr['state'] !== 'opened') {
                 continue;
             }
-            if ($user !== null) {
-                $mrId = (int) $mr['id'];
-                $isAuthor = (int) $mr['author_id'] === $user;
-                $hasApproved = array_key_exists($mrId, $approvedByUser);
-                // Keep MRs I authored, and MRs I have not reviewed yet (not mine
-                // and not yet approved by me). Drop MRs I already approved.
-                if (!$isAuthor && $hasApproved) {
-                    continue;
-                }
+            if (!$this->visibleToUser($mr, $user, $approvedByUser)) {
+                continue;
             }
             $rows[] = $this->buildMrRow($mr, $projects, $dataset, $now);
         }
 
         return $rows;
+    }
+
+    /**
+     * The "my view" list filter: keep MRs I authored, and MRs I have not
+     * reviewed yet (not mine and not yet approved by me). Drop MRs I already
+     * approved — they are not waiting on my review. Shared by the full list
+     * and the single-MR row patch so the two can never disagree.
+     *
+     * @param array<string, int|float|string|null> $mr
+     * @param array<int, true> $approvedByUser
+     */
+    private function visibleToUser(array $mr, null|int $user, array $approvedByUser): bool
+    {
+        if ($user === null) {
+            return true;
+        }
+
+        return (int) $mr['author_id'] === $user || !array_key_exists((int) $mr['id'], $approvedByUser);
     }
 
     /**

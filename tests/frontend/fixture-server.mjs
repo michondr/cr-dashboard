@@ -20,18 +20,34 @@ const MIME = {
 const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
 
+    // The same "my view" filter the real /api/data applies server-side: keep
+    // MRs the selected user authored plus open MRs they have not approved.
+    const myViewMrs = (mrs, user) => mrs.filter(
+        (mr) => mr.state === 'opened'
+            && (String(mr.author.id) === user
+                || !(mr.approvers || []).some((a) => String(a.id) === user)),
+    );
+
     if (url.pathname === '/api/data') {
+        const user = url.searchParams.get('user');
+        const payload = user ? { ...fixture, mrs: myViewMrs(fixture.mrs, user) } : fixture;
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(fixture));
+        res.end(JSON.stringify(payload));
 
         return;
     }
 
     // Single-MR payload, mirroring GET /api/mr/{id}: the row shape from the
-    // fixture's mrs list, 404 with mr:null when unknown.
+    // fixture's mrs list, 404 with mr:null when unknown or hidden by the
+    // same "my view" filter (so a `changed` event for an MR I approved is
+    // answered 404 and the frontend drops the row).
     const mrMatch = url.pathname.match(/^\/api\/mr\/(\d+)$/);
     if (mrMatch && req.method === 'GET') {
-        const mr = fixture.mrs.find((candidate) => String(candidate.id) === mrMatch[1]) || null;
+        let mr = fixture.mrs.find((candidate) => String(candidate.id) === mrMatch[1]) || null;
+        const user = url.searchParams.get('user');
+        if (mr && user && myViewMrs([mr], user).length === 0) {
+            mr = null;
+        }
         res.writeHead(mr === null ? 404 : 200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ mr }));
 

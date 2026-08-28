@@ -241,6 +241,31 @@ final class ApiContractTest extends TestCase
         self::assertNull($missingDecoded['mr']);
     }
 
+    public function testApiMrAppliesTheMyViewFilterToRowPatches(): void
+    {
+        // setUp: MR 101 is authored by user 1 and approved by user 2.
+        $kernel = new Kernel('test', true);
+        $kernel->boot();
+
+        $approved = Request::create('/api/mr/101?user=2', 'GET');
+        $approvedResponse = $kernel->handle($approved);
+        $kernel->terminate($approved, $approvedResponse);
+        self::assertSame(404, $approvedResponse->getStatusCode(), 'an MR I approved must not be patched back in');
+        $decoded = json_decode((string) $approvedResponse->getContent(), true);
+        self::assertIsArray($decoded);
+        self::assertNull($decoded['mr']);
+
+        $authored = Request::create('/api/mr/101?user=1', 'GET');
+        $authoredResponse = $kernel->handle($authored);
+        $kernel->terminate($authored, $authoredResponse);
+        self::assertSame(200, $authoredResponse->getStatusCode(), 'an MR I authored still returns');
+
+        $noFilter = Request::create('/api/mr/101', 'GET');
+        $noFilterResponse = $kernel->handle($noFilter);
+        $kernel->terminate($noFilter, $noFilterResponse);
+        self::assertSame(200, $noFilterResponse->getStatusCode(), 'without a user filter the row returns');
+    }
+
     public function testInvalidBucketFallsBackToDay(): void
     {
         $payload = $this->fetchApiData(['bucket' => 'bogus']);

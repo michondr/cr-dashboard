@@ -266,11 +266,22 @@ async function pollPresence() {
 
 // Refetches the dataset and swaps just the one changed row in place (no full
 // list rebuild, no scroll-position loss). A row that disappeared (merged,
-// closed) is removed; a brand-new row not yet in the DOM is spliced into its
-// sorted position live (follow-up F2).
+// closed) or dropped out of the "my view" filter (I approved it) is removed;
+// a brand-new row not yet in the DOM is spliced into its sorted position live
+// (follow-up F2).
 async function refetchAndPatchRow(mrId) {
     try {
-        const response = await fetch(`/api/mr/${encodeURIComponent(String(mrId))}`);
+        // Pass the same "my view" filter as /api/data so a `changed` event for
+        // an MR I just approved is answered with 404 and the row is dropped
+        // instead of being spliced back into "awaiting my review".
+        const params = new URLSearchParams();
+        if (state.userId) {
+            params.set('user', state.userId);
+        }
+        const query = params.toString();
+        const response = await fetch(
+            `/api/mr/${encodeURIComponent(String(mrId))}${query ? `?${query}` : ''}`,
+        );
         if (!response.ok && response.status !== 404) {
             return;
         }

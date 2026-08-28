@@ -36,13 +36,14 @@ final class ApiController
     /**
      * Single-MR payload for SSE-driven row patches: same shape as one element
      * of `mrs` in `/api/data`, without the metrics/users/meta overhead. 404
-     * (with `mr: null`) when the MR is not cached or no longer open, which the
-     * frontend treats as "remove the row".
+     * (with `mr: null`) when the MR is not cached, no longer open, or hidden
+     * by the optional `?user=` "my view" filter — the frontend treats that as
+     * "remove the row" (e.g. an MR I just approved must leave the board).
      */
     #[Route('/api/mr/{id}', name: 'api_mr', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function mr(int $id): JsonResponse
+    public function mr(Request $request, int $id): JsonResponse
     {
-        $mr = $this->apiBuilder->buildMr($id, time());
+        $mr = $this->apiBuilder->buildMr($id, time(), $this->resolveUser($request));
 
         return new JsonResponse(['mr' => $mr], $mr === null ? 404 : 200);
     }
