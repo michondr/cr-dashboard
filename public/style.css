@@ -254,6 +254,10 @@ body {
     min-height: 34px;
 }
 
+.mr-row:hover {
+    background: var(--panel-2);
+}
+
 .mr-row.dim {
     color: var(--text-dim);
 }
