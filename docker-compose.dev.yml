@@ -1,18 +1,22 @@
-# Local development compose file — run the app straight from the source checkout
-# so code edits are visible without rebuilding the image: nginx and php-fpm read
-# files from disk on every request. The image only needs a rebuild when
-# dependencies (composer.json/lock) or the Dockerfile itself change.
+# Primary compose file — run the app straight from the source checkout so code
+# edits are visible without rebuilding the image: nginx and php-fpm read files
+# from disk on every request. The image only needs a rebuild when dependencies
+# (composer.json/lock) or the Dockerfile itself change.
 #
-# Designed to run on the same host as the production container and SHARE the
-# production database, so the preview shows the real data:
+# Runs the same scheduled jobs as production: docker/crontab is mounted over
+# /etc/crontab (nightly app:sync at 03:00, app:rank-users at 04:33), so the
+# stack keeps the database fresh on its own.
+#
+# The override is loaded alongside so the container is routed through the
+# shared Traefik and served at cr.michondr.space:
 #
 #   docker compose -f docker-compose.dev.yml -f docker-compose.override.yml up -d --build
 #   docker compose -f docker-compose.dev.yml -f docker-compose.override.yml exec cr-dashboard php /app/bin/console app:sync --full   # first run / fresh volume
 #
-# The override is loaded alongside so the dev container is routed through the
-# shared Traefik and served at cr.michondr.space, exactly like production.
-# Both stacks share the fixed container_name company-cr-dashboard, so the
-# production stack must be stopped first:
+# The production stack (docker-compose.yml: baked image, authoritative
+# classmap) is the alternative for a build-time-checked deploy. Both stacks
+# share the fixed container_name recruitis-cr-dashboard, so only one can run
+# at a time:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.override.yml down
 services:
@@ -34,16 +38,14 @@ services:
       - ./src:/app/src         # backend
       - ./config:/app/config
       - ./bin:/app/bin
-      # The SAME database as production: cr-dashboard-data is the volume the
-      # production compose mounts, so the dev preview sees the real data.
-      # (Both compose files live in the same checkout, so the volume key
-      # resolves to the same <project>_cr-dashboard-data volume on the host.)
+      # The database volume. Both compose files live in the same checkout, so
+      # the volume key resolves to the same <project>_cr-dashboard-data volume
+      # on the host — the production stack mounts it too.
       - cr-dashboard-data:/var/lib/cr-dashboard
-      # No scheduled jobs in dev: the production cron keeps the shared database
-      # fresh, and the dev container only writes to it when sync is run
-      # explicitly (see the header). The sync lock in the DB makes even that
-      # safe to run while the production sync is mid-flight.
-      - ./docker/crontab.dev:/etc/crontab:ro
+      # The real crontab — the same scheduled jobs as production (nightly
+      # app:sync at 03:00, app:rank-users at 04:33). Mounted so job changes
+      # apply without rebuilding the image.
+      - ./docker/crontab:/etc/crontab:ro
     restart: unless-stopped
 
 volumes:

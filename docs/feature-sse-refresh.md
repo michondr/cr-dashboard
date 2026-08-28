@@ -78,7 +78,7 @@ nightly run does not re-notify). Stale-MR notifications: remove from the (delete
 
 Delete the `*/15` crontab line and the `SyncTrigger` spawn from `ApiController::data()`
 (remove `SyncTrigger` entirely if nothing else uses it). Update `docker/crontab`,
-`docker/crontab.dev`, tests, and SPEC references.
+tests, and SPEC references.
 
 ### 5. Header: countdown segmented control + auto-trigger
 

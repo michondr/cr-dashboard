@@ -13,7 +13,9 @@
 	migrate migrate-status migrate-diff db-reset cache-clear \
 	sync sync-full rank-users gitlab-probe serve \
 	docker-build docker-up docker-down docker-down-clean docker-logs \
-	docker-exec docker-migrate docker-sync docker-sync-full docker-rank-users
+	docker-exec docker-migrate docker-sync docker-sync-full docker-rank-users \
+	docker-build-prod docker-up-prod docker-down-prod docker-down-clean-prod docker-logs-prod \
+	docker-exec-prod docker-migrate-prod docker-sync-prod docker-sync-full-prod docker-rank-users-prod
 
 .DEFAULT_GOAL := help
 
@@ -31,7 +33,10 @@ FRONTEND := tests/frontend
 # text. Kept here so `make test-smoke` just works.
 PLAYWRIGHT_ENV := LD_LIBRARY_PATH=/tmp/cr-libs/root/usr/lib/x86_64-linux-gnu:/tmp/cr-libs/root/lib/x86_64-linux-gnu FONTCONFIG_PATH=/tmp/cr-libs/fontconfig
 
-DOCKER_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.override.yml
+# The dev stack (bind-mounted source, runs the crons) is the default; the
+# production stack (baked image, authoritative classmap) is the -prod variant.
+DOCKER_COMPOSE := docker compose -f docker-compose.dev.yml -f docker-compose.override.yml
+DOCKER_COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.override.yml
 
 # --- Help --------------------------------------------------------------------
 
@@ -116,34 +121,64 @@ gitlab-probe: ## Test GitLab connectivity, credentials and group access
 serve: ## PHP built-in server at http://127.0.0.1:8000
 	$(PHP) -S 127.0.0.1:8000 -t public public/index.php
 
-# --- Docker (production compose + Traefik override) -----------------------------
+# --- Docker (dev stack by default; -prod targets for the baked-image stack) -----
 
-docker-build: ## Build the production image
+docker-build: ## Build the dev image
 	$(DOCKER_COMPOSE) build
 
-docker-up: ## Start the production stack
+docker-build-prod: ## Build the production image
+	$(DOCKER_COMPOSE_PROD) build
+
+docker-up: ## Start the dev stack (bind-mounted source, runs the crons)
 	$(DOCKER_COMPOSE) up -d
 
-docker-down: ## Stop the production stack (keeps the data volume)
+docker-up-prod: ## Start the production stack (baked image)
+	$(DOCKER_COMPOSE_PROD) up -d
+
+docker-down: ## Stop the dev stack (keeps the data volume)
 	$(DOCKER_COMPOSE) down
 
-docker-down-clean: ## Stop and delete the data volume (destructive)
+docker-down-prod: ## Stop the production stack (keeps the data volume)
+	$(DOCKER_COMPOSE_PROD) down
+
+docker-down-clean: ## Stop the dev stack and delete the data volume (destructive)
 	$(DOCKER_COMPOSE) down -v
 
-docker-logs: ## Tail the container logs
+docker-down-clean-prod: ## Stop the production stack and delete the data volume (destructive)
+	$(DOCKER_COMPOSE_PROD) down -v
+
+docker-logs: ## Tail the dev container logs
 	$(DOCKER_COMPOSE) logs -f
 
-docker-exec: ## Open a shell in the running container
+docker-logs-prod: ## Tail the production container logs
+	$(DOCKER_COMPOSE_PROD) logs -f
+
+docker-exec: ## Open a shell in the dev container
 	$(DOCKER_COMPOSE) exec cr-dashboard sh
 
-docker-migrate: ## Run migrations inside the container
+docker-exec-prod: ## Open a shell in the production container
+	$(DOCKER_COMPOSE_PROD) exec cr-dashboard sh
+
+docker-migrate: ## Run migrations inside the dev container
 	$(DOCKER_COMPOSE) exec cr-dashboard php /app/bin/console doctrine:migrations:migrate --no-interaction
 
-docker-sync: ## Incremental sync inside the container
+docker-migrate-prod: ## Run migrations inside the production container
+	$(DOCKER_COMPOSE_PROD) exec cr-dashboard php /app/bin/console doctrine:migrations:migrate --no-interaction
+
+docker-sync: ## Incremental sync inside the dev container
 	$(DOCKER_COMPOSE) exec cr-dashboard php /app/bin/console app:sync
 
-docker-sync-full: ## Full backfill inside the container
+docker-sync-prod: ## Incremental sync inside the production container
+	$(DOCKER_COMPOSE_PROD) exec cr-dashboard php /app/bin/console app:sync
+
+docker-sync-full: ## Full backfill inside the dev container
 	$(DOCKER_COMPOSE) exec cr-dashboard php /app/bin/console app:sync --full
 
-docker-rank-users: ## Recompute rank counts inside the container
+docker-sync-full-prod: ## Full backfill inside the production container
+	$(DOCKER_COMPOSE_PROD) exec cr-dashboard php /app/bin/console app:sync --full
+
+docker-rank-users: ## Recompute rank counts inside the dev container
 	$(DOCKER_COMPOSE) exec cr-dashboard php /app/bin/console app:rank-users
+
+docker-rank-users-prod: ## Recompute rank counts inside the production container
+	$(DOCKER_COMPOSE_PROD) exec cr-dashboard php /app/bin/console app:rank-users

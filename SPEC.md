@@ -612,7 +612,7 @@ one instead; `app:refresh-worker` runs as its own supervisord program, not a cro
 33 4 * * * php /app/bin/console app:rank-users
 ```
 
-For local development, `docker-compose.dev.yml` runs the app from the source checkout via bind mounts (`src/`, `public/`, `config/`, `bin/`), so code changes apply without rebuilding the image (nginx and php-fpm read files from disk on every request). It builds with `CLASSMAP_AUTHORITATIVE=""` so the autoloader keeps its PSR-4 fallback and classes added to the mounted `src/` resolve immediately; the production build (CI and the server) keeps the authoritative classmap default. `var/` is intentionally not mounted — the entrypoint chowns `/app/var` to `www-data`, which would take over the host checkout. The dev container is meant to run on the same host as production and mounts the same `cr-dashboard-data` volume, so the preview shows the real database; it mounts `docker/crontab.dev` (no scheduled jobs) over `/etc/crontab` so it never writes to the shared database on a schedule — the production cron keeps it fresh, and the dev container syncs only on demand (`docker compose -f docker-compose.dev.yml exec cr-dashboard php /app/bin/console app:sync`). The image only needs a rebuild when `composer.json`/`composer.lock` or the Dockerfile change.
+`docker-compose.dev.yml` is the primary stack: it runs the app from the source checkout via bind mounts (`src/`, `public/`, `config/`, `bin/`), so code changes apply without rebuilding the image (nginx and php-fpm read files from disk on every request). It builds with `CLASSMAP_AUTHORITATIVE=""` so the autoloader keeps its PSR-4 fallback and classes added to the mounted `src/` resolve immediately. `var/` is intentionally not mounted — the entrypoint chowns `/app/var` to `www-data`, which would take over the host checkout. It mounts `docker/crontab` over `/etc/crontab`, so it runs the same scheduled jobs as production (nightly `app:sync --refresh-open --notify-slack` at 03:00, `app:rank-users` at 04:33). The image only needs a rebuild when `composer.json`/`composer.lock` or the Dockerfile change. The production stack (`docker-compose.yml`) is the alternative: a baked image with the authoritative classmap, for a build-time-checked deploy. Both stacks share the fixed container name `recruitis-cr-dashboard`, so only one can run at a time.
 
 ### 4.13 GitLab CI
 
@@ -620,7 +620,7 @@ The pipeline has two stages: test and build.
 
 The test stage runs PHPUnit, PHPStan (level 10), and phpcs on the backend, and the frontend smoke test. It creates `var/cache` first, because phpcs writes its cache file (`var/cache/phpcs-cache`) there and does not create missing parent directories. The build stage uses kaniko. Kaniko builds the image without a privileged runner. The pipeline logs in to the GitLab Container Registry. The pipeline pushes the image to `$CI_REGISTRY_IMAGE`.
 
-Deployment is manual. The operator runs `docker compose up` on the target host. The same image runs locally and in production.
+Deployment is manual. The operator runs `make docker-up` (the dev stack, §4.12) on the target host; `make docker-up-prod` deploys the baked-image production stack instead.
 
 ### 4.14 Local testing
 
