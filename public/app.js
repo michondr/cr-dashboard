@@ -264,6 +264,39 @@ async function pollPresence() {
     }
 }
 
+// Removes a row that vanished (merged, closed, or dropped out of the "my
+// view" filter) and refreshes whatever count renders it: the "(count)" suffix
+// of its "My view" section heading, or the "N stale Merge Requests" link
+// byline. The stale link+wrapper are removed outright when the last stale row
+// goes.
+function removeMrRow(row) {
+    const section = row.closest('.mr-section');
+    const wrapper = row.closest('.stale-wrapper');
+    row.remove();
+
+    if (section) {
+        const heading = section.querySelector('.mr-section-heading');
+        if (heading) {
+            const text = heading.textContent || '';
+            const paren = text.indexOf(' (');
+            const label = paren === -1 ? text : text.slice(0, paren);
+            heading.textContent = `${label} (${section.querySelectorAll('.mr-row').length})`;
+        }
+    }
+
+    if (wrapper) {
+        const link = wrapper.previousElementSibling;
+        if (wrapper.querySelectorAll('.mr-row').length === 0) {
+            wrapper.remove();
+            if (link) {
+                link.remove();
+            }
+        } else {
+            updateStaleLinkText(link, wrapper);
+        }
+    }
+}
+
 // Refetches the dataset and swaps just the one changed row in place (no full
 // list rebuild, no scroll-position loss). A row that disappeared (merged,
 // closed) or dropped out of the "my view" filter (I approved it) is removed;
@@ -289,10 +322,11 @@ async function refetchAndPatchRow(mrId) {
         const mr = body.mr;
 
         const existingRow = refreshProgressRow(mrId);
-        // 404 / null: no longer cached or no longer open — drop the row.
+        // 404 / null: no longer cached or no longer open — drop the row and
+        // refresh the count that renders it.
         if (!mr) {
             if (existingRow) {
-                existingRow.remove();
+                removeMrRow(existingRow);
             }
 
             return;

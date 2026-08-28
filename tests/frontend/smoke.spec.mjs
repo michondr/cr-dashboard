@@ -362,6 +362,11 @@ test('a changed event drops an MR I just approved from "awaiting my review"', as
     // MR 205 (Jane Doe, no approvers yet) is waiting on John Roe's review.
     const awaiting = page.locator('.mr-section', { hasText: 'Awaiting my review' });
     await expect(awaiting.locator('.mr-row[data-mr-id="205"]')).toHaveCount(1);
+    const headingCount = async () => {
+        const text = await awaiting.locator('.mr-section-heading').textContent();
+        return parseInt(text.match(/\((\d+)\)/)?.[1] ?? '0', 10);
+    };
+    const rowsBefore = await headingCount();
 
     // Approve MR 205 as user 2, then fire a changed event: the row patch
     // carries the ?user=2 filter, the fixture answers 404 (approved by me),
@@ -378,6 +383,8 @@ test('a changed event drops an MR I just approved from "awaiting my review"', as
     await request.post('/__test/sse', { data: { type: 'changed', mr_id: 205 } });
 
     await expect(awaiting.locator('.mr-row[data-mr-id="205"]')).toHaveCount(0);
+    // The section heading count follows the row removal.
+    await expect.poll(headingCount).toBe(rowsBefore - 1);
 });
 
 test('chart x-axis labels show dates, not bogus year numbers', async ({ page }) => {
