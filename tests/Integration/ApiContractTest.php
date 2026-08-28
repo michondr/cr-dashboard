@@ -142,7 +142,11 @@ final class ApiContractTest extends TestCase
         self::assertNull($project['avatar_url']);
         self::assertFalse($openMr['draft']);
         self::assertFalse($openMr['stale']);
-        self::assertSame(2 * self::DAY, $openMr['age_seconds']);
+        // Age is measured from a `time()` taken in setUp to one taken in the
+        // controller; a wall-clock second may tick in between, so assert a
+        // small window instead of an exact value.
+        self::assertGreaterThanOrEqual(2 * self::DAY, $openMr['age_seconds']);
+        self::assertLessThan(2 * self::DAY + 60, $openMr['age_seconds']);
         self::assertSame(self::DAY, $openMr['time_to_first_approval_seconds']);
         self::assertSame(1, $openMr['commit_count']);
 
