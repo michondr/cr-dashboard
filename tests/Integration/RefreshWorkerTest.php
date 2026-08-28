@@ -79,7 +79,7 @@ final class RefreshWorkerTest extends TestCase
     public function testACycleListsFetchesAndCompletesEachQueuedMr(): void
     {
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
-        $this->client->mergeRequests['opened'] = [
+        $this->client->mergeRequests['all'] = [
             $this->mr(101, '2026-08-05T09:00:00+00:00'),
         ];
 
@@ -112,7 +112,7 @@ final class RefreshWorkerTest extends TestCase
     public function testNewlyDiscoveredMrsAreQueuedFirstAndFlaggedIsNew(): void
     {
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
-        $this->client->mergeRequests['opened'] = [
+        $this->client->mergeRequests['all'] = [
             $this->mr(101, '2026-08-01T09:00:00+00:00'),
             $this->mr(202, '2026-08-05T09:00:00+00:00'),
         ];
@@ -132,7 +132,7 @@ final class RefreshWorkerTest extends TestCase
         $this->seedCachedMr(102, 2, updated: '2026-07-01T09:00:00+00:00');
         // Only 101 was updated since the last sync; 102 must still be queued
         // (approvals/discussions can change without bumping updated_at).
-        $this->client->mergeRequests['opened'] = [
+        $this->client->mergeRequests['all'] = [
             $this->mr(101, '2026-08-05T09:00:00+00:00'),
         ];
 
@@ -167,7 +167,7 @@ final class RefreshWorkerTest extends TestCase
         $this->seedCachedMr(101, 1, updated: '2026-08-10T09:00:00+00:00');
         // Created >60 days ago: stale, must not be queued by a refresh cycle.
         $this->seedCachedMr(102, 2, updated: '2026-05-01T09:00:00+00:00');
-        $this->client->mergeRequests['opened'] = [];
+        $this->client->mergeRequests['all'] = [];
 
         $this->queue->requestCycle($now, null);
         $this->worker->tick($now);
@@ -183,7 +183,7 @@ final class RefreshWorkerTest extends TestCase
     public function testCycleStartedBroadcastsTheOrderedQueuedMrIds(): void
     {
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
-        $this->client->mergeRequests['opened'] = [
+        $this->client->mergeRequests['all'] = [
             $this->mr(101, '2026-08-01T09:00:00+00:00'),
             $this->mr(202, '2026-08-05T09:00:00+00:00'),
         ];
@@ -202,14 +202,13 @@ final class RefreshWorkerTest extends TestCase
 
     public function testClosedMrsSurfacedByTheListCallAreRemovedFromTheCache(): void
     {
-        // Defensive parity with Synchronizer::incremental(): the list call is
-        // filtered to state=opened so this is a rare edge (a transition right
-        // at the query boundary), but if GitLab does surface one, it must not
-        // stay cached or get queued for a sub-resource fetch.
+        // Parity with Synchronizer::incremental(): the list call is state=all,
+        // so a closed transition is a normal occurrence and must not stay
+        // cached or get queued for a sub-resource fetch.
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
         $closed = $this->mr(101, '2026-08-05T09:00:00+00:00');
         $closed['state'] = 'closed';
-        $this->client->mergeRequests['opened'] = [$closed];
+        $this->client->mergeRequests['all'] = [$closed];
 
         $this->queue->requestCycle(1000, null);
         $this->worker->tick(1000);
@@ -218,10 +217,40 @@ final class RefreshWorkerTest extends TestCase
         self::assertSame(0, $this->rowCount('SELECT COUNT(*) FROM refresh_queue'));
     }
 
+    public function testMergedMrsSurfacedByTheListCallLeaveTheBoard(): void
+    {
+        // An MR merged since the last sync appears in the state=all list with
+        // state=merged. Its cached row must be corrected so it stops showing
+        // on the board, and it must not be queued for a sub-resource refresh
+        // (those are already cached from when it was open). A `changed` event
+        // tells the frontend to refetch the row, which now 404s.
+        $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
+        $merged = $this->mr(101, '2026-08-05T09:00:00+00:00');
+        $merged['state'] = 'merged';
+        $merged['merged_at'] = '2026-08-05T10:00:00+00:00';
+        $this->client->mergeRequests['all'] = [$merged];
+
+        $this->queue->requestCycle(1000, null);
+        $this->worker->tick(1000);
+
+        self::assertSame(
+            'merged',
+            $this->value('SELECT state FROM merge_requests WHERE id = 101'),
+        );
+        self::assertSame(0, $this->rowCount('SELECT COUNT(*) FROM refresh_queue'), 'merged MR is not refreshed');
+
+        $changed = array_values(array_filter(
+            $this->hub->published,
+            static fn (array $event): bool => $event['topic'] === 'data' && $event['data']['type'] === 'changed',
+        ));
+        self::assertCount(1, $changed);
+        self::assertSame(101, $changed[0]['data']['mr_id']);
+    }
+
     public function testProgressEventsAreEmittedAfterEachSubResourceFetch(): void
     {
         $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
-        $this->client->mergeRequests['opened'] = [
+        $this->client->mergeRequests['all'] = [
             $this->mr(101, '2026-08-05T09:00:00+00:00'),
         ];
         $this->queue->requestCycle(1000, null);

@@ -314,6 +314,31 @@ final class SynchronizerTest extends TestCase
         self::assertStringStartsWith('2026-08-10T', $updatedAfter);
     }
 
+    public function testRefreshOpenCorrectsMrsMergedWhileNoCycleObservedTheTransition(): void
+    {
+        $this->client->projects = [
+            ['id' => 1, 'path_with_namespace' => 'group/proj'],
+        ];
+        $this->client->mergeRequests['opened'] = [
+            $this->mr(101, 'opened', '2026-08-01T09:00:00+00:00'),
+        ];
+        $this->client->mergeRequests['merged'] = [];
+        $this->synchronizer->full((int) strtotime('2026-08-10T12:00:00+00:00'));
+        self::assertSame('opened', $this->value('SELECT state FROM merge_requests WHERE id = 101'));
+
+        // The MR is merged on GitLab. refresh-open's opened fetch never sees
+        // it and the refresh worker only watches the since-last-sync window,
+        // so without the merged-state reconcile it would linger as "opened"
+        // on the board forever.
+        $this->client->mergeRequests['opened'] = [];
+        $this->client->mergeRequests['merged'] = [
+            $this->mr(101, 'merged', '2026-08-01T09:00:00+00:00', '2026-08-11T09:00:00+00:00'),
+        ];
+        $this->synchronizer->refreshOpen((int) strtotime('2026-08-11T12:00:00+00:00'));
+
+        self::assertSame('merged', $this->value('SELECT state FROM merge_requests WHERE id = 101'));
+    }
+
     public function testIncrementalDropsMrThatTransitionsToClosed(): void
     {
         $this->client->projects = [

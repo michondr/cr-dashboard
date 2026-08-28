@@ -73,8 +73,12 @@ final class RefreshWorker
         $this->queue->beginCycle($now, $userId);
 
         $lastSync = $this->synchronizer->lastSync() ?? ($now - 60);
+        // state=all (not opened-only): an MR merged since the last sync no
+        // longer appears in the opened list, and the cached-ref tier below
+        // only re-fetches sub-resources without touching the MR's state — so
+        // the list call is the only place the merged transition is observed.
         $mrs = $this->client->groupMergeRequests($this->config->gitlabGroup, [
-            'state' => 'opened',
+            'state' => 'all',
             'updated_after' => gmdate(DATE_ATOM, $lastSync - 60),
         ]);
 
@@ -92,8 +96,18 @@ final class RefreshWorker
                 continue;
             }
 
-            if ($this->stringValue($mr, 'state') === 'closed') {
+            $state = $this->stringValue($mr, 'state');
+            if ($state === 'closed') {
                 $this->synchronizer->removeMergeRequest($id);
+                continue;
+            }
+            if ($state === 'merged') {
+                // Record the merge (state, merged_at) so the MR leaves the
+                // board; sub-resources are already cached from when it was
+                // open, so no refresh is queued. The changed event makes the
+                // frontend refetch the row, get a 404, and drop it.
+                $this->synchronizer->storeMergeRequestRow($mr);
+                $this->publish('data', ['type' => 'changed', 'mr_id' => $id]);
                 continue;
             }
 

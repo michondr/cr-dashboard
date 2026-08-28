@@ -301,6 +301,28 @@ final class Synchronizer
 
             $this->report(sprintf('  synced %d of %d MR(s).', $done, $total));
 
+            // Correct MRs merged since their last fetch: the open-MR fetch
+            // above never sees them, and the refresh worker only watches the
+            // since-last-sync window, so one merged while nobody observed the
+            // transition would linger as "opened" on the board forever. Fetch
+            // recently merged MRs and update their main rows (sub-resources
+            // are already cached; the state change is all that is needed).
+            $window = $now - ($this->config->retentionDays * 86400);
+            $corrected = 0;
+            foreach (
+                $this->client->groupMergeRequests($this->config->gitlabGroup, [
+                    'state' => 'merged',
+                    'updated_after' => gmdate(DATE_ATOM, $window),
+                ]) as $mr
+            ) {
+                if (!is_array($mr) || !$this->isAllowedMr($mr, $projectsById)) {
+                    continue;
+                }
+                $this->storeMergeRequestRow($mr);
+                $corrected++;
+            }
+            $this->report(sprintf('  corrected %d merged MR(s).', $corrected));
+
             $pruned = $this->applyRetention($now);
             $this->report(sprintf('Retention pruned %d MR(s).', $pruned));
             $this->syncState->set('last_sync', (string) $now);
@@ -438,6 +460,53 @@ final class Synchronizer
     }
 
     /**
+     * Upsert the main merge-request row without touching any sub-resource.
+     * Used on its own by the refresh worker to record a `merged` transition
+     * surfaced by its list call (sub-resources are already cached from when
+     * the MR was open), and by the nightly refresh to correct MRs merged
+     * while no cycle observed the transition.
+     *
+     * @param array<array-key, mixed> $mr
+     */
+    public function storeMergeRequestRow(array $mr): void
+    {
+        $authorId = $this->authorId($mr);
+        if ($authorId !== 0) {
+            $author = $mr['author'] ?? null;
+            if (is_array($author)) {
+                $this->users->upsert($this->normalizeUser($author));
+            }
+        }
+
+        $created = $this->parseTime($mr['created_at'] ?? null);
+        if ($created === null) {
+            return;
+        }
+        $updated = $this->parseTime($mr['updated_at'] ?? null) ?? $created;
+        $state = $this->stringValue($mr, 'state');
+        $state = $state === 'locked' ? 'closed' : $state;
+
+        $this->mergeRequests->upsert([
+            'id' => $this->intValue($mr, 'id'),
+            'iid' => $this->intValue($mr, 'iid'),
+            'project_id' => $this->intValue($mr, 'project_id'),
+            'title' => $this->stringValue($mr, 'title'),
+            'description' => $this->nullableStringValue($mr, 'description'),
+            'author_id' => $authorId,
+            'state' => $state,
+            'draft' => $this->boolValue($mr, 'draft') ? 1 : 0,
+            'created_at' => $created,
+            'merged_at' => $this->parseTime($mr['merged_at'] ?? null),
+            'closed_at' => $this->parseTime($mr['closed_at'] ?? null),
+            'updated_at' => $updated,
+            'web_url' => $this->nullableStringValue($mr, 'web_url'),
+            'merge_status' => $this->stringValue($mr, 'merge_status'),
+            'has_conflicts' => $this->boolValue($mr, 'has_conflicts') ? 1 : 0,
+            'labels' => $this->labelsJson($mr),
+        ]);
+    }
+
+    /**
      * @param array<array-key, mixed> $mr
      */
     private function syncMergeRequest(array $mr): void
@@ -487,47 +556,6 @@ final class Synchronizer
         }
 
         $this->storePipelinesAndJobs($id, $projectId, $this->client->pipelines($projectId, $iid));
-    }
-
-    /**
-     * @param array<array-key, mixed> $mr
-     */
-    private function storeMergeRequestRow(array $mr): void
-    {
-        $authorId = $this->authorId($mr);
-        if ($authorId !== 0) {
-            $author = $mr['author'] ?? null;
-            if (is_array($author)) {
-                $this->users->upsert($this->normalizeUser($author));
-            }
-        }
-
-        $created = $this->parseTime($mr['created_at'] ?? null);
-        if ($created === null) {
-            return;
-        }
-        $updated = $this->parseTime($mr['updated_at'] ?? null) ?? $created;
-        $state = $this->stringValue($mr, 'state');
-        $state = $state === 'locked' ? 'closed' : $state;
-
-        $this->mergeRequests->upsert([
-            'id' => $this->intValue($mr, 'id'),
-            'iid' => $this->intValue($mr, 'iid'),
-            'project_id' => $this->intValue($mr, 'project_id'),
-            'title' => $this->stringValue($mr, 'title'),
-            'description' => $this->nullableStringValue($mr, 'description'),
-            'author_id' => $authorId,
-            'state' => $state,
-            'draft' => $this->boolValue($mr, 'draft') ? 1 : 0,
-            'created_at' => $created,
-            'merged_at' => $this->parseTime($mr['merged_at'] ?? null),
-            'closed_at' => $this->parseTime($mr['closed_at'] ?? null),
-            'updated_at' => $updated,
-            'web_url' => $this->nullableStringValue($mr, 'web_url'),
-            'merge_status' => $this->stringValue($mr, 'merge_status'),
-            'has_conflicts' => $this->boolValue($mr, 'has_conflicts') ? 1 : 0,
-            'labels' => $this->labelsJson($mr),
-        ]);
     }
 
     /**
