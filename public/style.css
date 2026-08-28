@@ -54,7 +54,7 @@ body {
     content: attr(data-tip);
     position: absolute;
     left: 0;
-    bottom: 130%;
+    top: 130%;
     z-index: 30;
     width: max-content;
     max-width: 320px;
