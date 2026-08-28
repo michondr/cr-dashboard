@@ -24,6 +24,11 @@ final class FakeGitLabClient implements GitLabClientInterface
     /**
      * @var array<int, array<string, mixed>>
      */
+    public array $mergeRequestByIid = [];
+
+    /**
+     * @var array<int, array<string, mixed>>
+     */
     public array $approvalsByIid = [];
 
     /**
@@ -53,6 +58,8 @@ final class FakeGitLabClient implements GitLabClientInterface
 
     public int $groupProjectsCalls = 0;
     public int $groupMergeRequestsCalls = 0;
+    public int $mergeRequestCalls = 0;
+    public int $subResourceFetches = 0;
     public int $jobsCalls = 0;
     public int $commitStatsCalls = 0;
     public int $authorMergeRequestCountCalls = 0;
@@ -97,8 +104,20 @@ final class FakeGitLabClient implements GitLabClientInterface
     /**
      * @return array<string, mixed>
      */
+    public function mergeRequest(int $projectId, int $iid): array
+    {
+        $this->mergeRequestCalls++;
+
+        return $this->mergeRequestByIid[$iid] ?? [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function approvals(int $projectId, int $iid): array
     {
+        $this->subResourceFetches++;
+
         return $this->approvalsByIid[$iid] ?? ['approved_by' => []];
     }
 
@@ -107,6 +126,8 @@ final class FakeGitLabClient implements GitLabClientInterface
      */
     public function discussions(int $projectId, int $iid): array
     {
+        $this->subResourceFetches++;
+
         return $this->discussionsByIid[$iid] ?? [];
     }
 
@@ -115,6 +136,8 @@ final class FakeGitLabClient implements GitLabClientInterface
      */
     public function pipelines(int $projectId, int $iid): array
     {
+        $this->subResourceFetches++;
+
         return $this->pipelinesByIid[$iid] ?? [];
     }
 
@@ -123,6 +146,7 @@ final class FakeGitLabClient implements GitLabClientInterface
      */
     public function jobs(int $projectId, int $pipelineId): array
     {
+        $this->subResourceFetches++;
         $this->jobsCalls++;
 
         return $this->jobsByPipeline[$pipelineId] ?? [];
@@ -133,6 +157,8 @@ final class FakeGitLabClient implements GitLabClientInterface
      */
     public function commits(int $projectId, int $iid): array
     {
+        $this->subResourceFetches++;
+
         return $this->commitsByIid[$iid] ?? [];
     }
 

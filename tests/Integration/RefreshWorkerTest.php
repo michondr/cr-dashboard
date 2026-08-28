@@ -135,6 +135,9 @@ final class RefreshWorkerTest extends TestCase
         $this->client->mergeRequests['all'] = [
             $this->mr(101, '2026-08-05T09:00:00+00:00'),
         ];
+        // 102 joins the cached-ref tier, whose per-MR state check needs a
+        // single-MR payload.
+        $this->client->mergeRequestByIid[102] = $this->mr(102, '2026-07-01T09:00:00+00:00');
 
         $this->queue->requestCycle(1000, null);
         $this->worker->tick(1000);
@@ -168,6 +171,9 @@ final class RefreshWorkerTest extends TestCase
         // Created >60 days ago: stale, must not be queued by a refresh cycle.
         $this->seedCachedMr(102, 2, updated: '2026-05-01T09:00:00+00:00');
         $this->client->mergeRequests['all'] = [];
+        // 101 is a cached-ref job here (the list is empty), so the state
+        // check needs a single-MR payload.
+        $this->client->mergeRequestByIid[101] = $this->mr(101, '2026-08-10T09:00:00+00:00');
 
         $this->queue->requestCycle($now, null);
         $this->worker->tick($now);
@@ -245,6 +251,57 @@ final class RefreshWorkerTest extends TestCase
         ));
         self::assertCount(1, $changed);
         self::assertSame(101, $changed[0]['data']['mr_id']);
+    }
+
+    public function testCachedMrMergedBeforeTheListWindowIsCorrectedByTheStateCheck(): void
+    {
+        // The MR was merged before the last sync, so the updated-since list
+        // (updated_after = lastSync - 60) does not return it and its cached
+        // row is still "opened". The cached-ref tier's per-MR state check is
+        // the only observer of the transition — without it the MR would linger
+        // on the board until the nightly reconcile.
+        $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
+        $this->client->mergeRequests['all'] = [];
+        $merged = $this->mr(101, '2026-08-01T09:00:00+00:00');
+        $merged['state'] = 'merged';
+        $merged['merged_at'] = '2026-08-01T10:00:00+00:00';
+        $this->client->mergeRequestByIid[101] = $merged;
+
+        $this->queue->requestCycle(1000, null);
+        $this->worker->tick(1000); // list call: empty, so 101 joins the cached-ref tier
+        $this->worker->tick(1001); // state check observes the merge
+
+        self::assertSame('merged', $this->value('SELECT state FROM merge_requests WHERE id = 101'));
+        self::assertSame('done', $this->value('SELECT state FROM refresh_queue WHERE mr_id = 101'));
+        self::assertSame(1, $this->client->mergeRequestCalls);
+        self::assertSame(0, $this->client->subResourceFetches, 'merged MR needs no sub-resource refresh');
+
+        $changed = array_values(array_filter(
+            $this->hub->published,
+            static fn (array $event): bool => $event['topic'] === 'data' && $event['data']['type'] === 'changed',
+        ));
+        self::assertCount(1, $changed);
+        self::assertSame(101, $changed[0]['data']['mr_id']);
+    }
+
+    public function testCachedMrClosedBeforeTheListWindowIsRemovedByTheStateCheck(): void
+    {
+        // Same gap as the merged variant, for the closed transition: the
+        // cached row must not keep showing as "opened" on the board.
+        $this->seedCachedMr(101, 1, updated: '2026-08-01T09:00:00+00:00');
+        $this->client->mergeRequests['all'] = [];
+        $closed = $this->mr(101, '2026-08-01T09:00:00+00:00');
+        $closed['state'] = 'closed';
+        $closed['closed_at'] = '2026-08-01T10:00:00+00:00';
+        $this->client->mergeRequestByIid[101] = $closed;
+
+        $this->queue->requestCycle(1000, null);
+        $this->worker->tick(1000);
+        $this->worker->tick(1001);
+
+        self::assertSame(0, $this->rowCount('SELECT COUNT(*) FROM merge_requests'));
+        self::assertSame(1, $this->client->mergeRequestCalls);
+        self::assertSame(0, $this->client->subResourceFetches);
     }
 
     public function testProgressEventsAreEmittedAfterEachSubResourceFetch(): void

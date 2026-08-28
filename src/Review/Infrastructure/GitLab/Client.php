@@ -76,6 +76,14 @@ final class Client implements GitLabClientInterface
     /**
      * @return array<string, mixed>
      */
+    public function mergeRequest(int $projectId, int $iid): array
+    {
+        return $this->getMap('projects/' . $projectId . '/merge_requests/' . $iid);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function approvals(int $projectId, int $iid): array
     {
         return $this->getMap('projects/' . $projectId . '/merge_requests/' . $iid . '/approvals');

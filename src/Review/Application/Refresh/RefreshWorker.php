@@ -36,8 +36,10 @@ final class RefreshWorker
     private array $cyclePayloads = [];
 
     /**
-     * Cached open MRs queued without a fresh GitLab payload (their main row is
-     * current); only their sub-resources are re-fetched.
+     * Cached open MRs queued without a fresh GitLab payload (they did not
+     * appear in the updated-since list); only their sub-resources are
+     * re-fetched, after a per-MR state check so a merge/close that happened
+     * before the list window is still observed.
      *
      * @var array<int, array{id: int, project_id: int, iid: int, author_id: int}>
      */
@@ -180,13 +182,7 @@ final class RefreshWorker
             if ($mr !== null) {
                 $this->synchronizer->syncMergeRequestForRefresh($mr, $onProgress);
             } else {
-                $this->synchronizer->refreshSubResources(
-                    $ref['id'],
-                    $ref['project_id'],
-                    $ref['iid'],
-                    $ref['author_id'],
-                    $onProgress,
-                );
+                $this->processCachedRef($ref, $onProgress);
             }
             $this->queue->markDone($mrId);
             $this->publish('refresh', ['type' => 'done', 'mr_id' => $mrId]);
@@ -200,6 +196,36 @@ final class RefreshWorker
         }
 
         return true;
+    }
+
+    /**
+     * A cached-open MR the updated-since list did not return. Its main row is
+     * assumed current, but the state may have changed outside the list window
+     * (e.g. an MR merged before the last sync): verify with one GET and
+     * correct the transition before re-fetching sub-resources. Once corrected,
+     * the MR drops out of `openMergeRequestRefs` and never re-enters this tier.
+     * The caller publishes the `changed` event after the job completes.
+     *
+     * @param array{id: int, project_id: int, iid: int, author_id: int} $ref
+     * @param callable(int, int): void $onProgress
+     */
+    private function processCachedRef(array $ref, callable $onProgress): void
+    {
+        $fresh = $this->client->mergeRequest($ref['project_id'], $ref['iid']);
+        $state = $this->stringValue($fresh, 'state');
+
+        if ($state === 'merged') {
+            $this->synchronizer->storeMergeRequestRow($fresh);
+
+            return;
+        }
+        if ($state === 'closed') {
+            $this->synchronizer->removeMergeRequest($ref['id']);
+
+            return;
+        }
+
+        $this->synchronizer->syncMergeRequestForRefresh($fresh, $onProgress);
     }
 
     /**

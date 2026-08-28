@@ -19,6 +19,16 @@ interface GitLabClientInterface
     public function groupMergeRequests(string $groupPath, array $query): array;
 
     /**
+     * The current state of a single merge request. Used by the refresh worker
+     * to verify the state of a cached-open MR that the updated-since list
+     * did not return (approvals and merges can happen without a cached row
+     * observing them in the list window).
+     *
+     * @return array<string, mixed>
+     */
+    public function mergeRequest(int $projectId, int $iid): array;
+
+    /**
      * @return array<string, mixed>
      */
     public function approvals(int $projectId, int $iid): array;
