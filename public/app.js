@@ -541,6 +541,16 @@ function formatRelative(secondsAgo) {
     return `${Math.floor(secondsAgo / 86400)}d ago`;
 }
 
+// Exact wall-clock time for the sync-status hover tooltip. The API timestamps
+// are UTC ISO strings; formatted in UTC to match the chart axis and the cron
+// schedule (03:00 / 04:33 UTC), so "1d ago" can be checked against the crontab.
+function formatExactTime(iso) {
+    const d = new Date(iso);
+    const p = (n) => String(n).padStart(2, '0');
+
+    return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} UTC`;
+}
+
 
 function yAxisValues(unit) {
     return (_u, splits) => splits.map((value) => {
@@ -1048,6 +1058,7 @@ function tickSyncStatus() {
     }
     if (!meta.last_sync_at) {
         node.textContent = 'Last sync: never';
+        node.dataset.tip = 'Last sync: never';
 
         return;
     }
@@ -1057,14 +1068,17 @@ function tickSyncStatus() {
     const lastAgo = Math.max(0, Math.floor((now - lastSync) / 1000));
 
     let text = `Last sync: ${formatRelative(lastAgo)}`;
+    const tipLines = [`Last sync: ${formatExactTime(meta.last_sync_at)}`];
 
     if (meta.last_rank_at) {
         const lastRank = Date.parse(meta.last_rank_at);
         const rankAgo = Math.max(0, Math.floor((now - lastRank) / 1000));
         text += ` · ranks: ${formatRelative(rankAgo)}`;
+        tipLines.push(`Ranks: ${formatExactTime(meta.last_rank_at)}`);
     }
 
     node.textContent = text;
+    node.dataset.tip = tipLines.join('\n');
 }
 
 function median(nums) {

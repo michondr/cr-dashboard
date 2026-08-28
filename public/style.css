@@ -44,6 +44,30 @@ body {
 .sync-status {
     color: var(--text-dim);
     font-size: 13px;
+    position: relative;
+    cursor: help;
+}
+
+/* Hover tooltip on the sync-status line: the exact wall-clock times behind the
+   "Last sync: Xd ago · ranks: Yd ago" relative text (see formatExactTime). */
+.sync-status[data-tip]:hover::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 0;
+    bottom: 130%;
+    z-index: 30;
+    width: max-content;
+    max-width: 320px;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: normal;
+    line-height: 1.4;
+    white-space: pre-line;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* ---------- Segmented control (reusable) ---------- */
