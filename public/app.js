@@ -6,6 +6,7 @@ const REFRESH_MS = 60_000;
 const REFRESH_INTERVAL_STORAGE_KEY = 'cr-dashboard-refresh-interval';
 const REFRESH_INTERVAL_OPTIONS = [0, 60, 300, 900];
 const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
+const HIDE_DRAFTS_STORAGE_KEY = 'cr-dashboard-hide-drafts';
 
 const MERCURE_URL = '/.well-known/mercure';
 const SSE_ERROR_THRESHOLD = 3;
@@ -140,6 +141,7 @@ const METRICS = {
 let state = {
     bucket: 'day',
     userId: readUserIdFromUrl(),
+    hideDrafts: readHideDrafts(),
     focusedMetricKey: null,
     refreshIntervalSeconds: readRefreshInterval(),
     refreshDeadline: null,
@@ -322,9 +324,11 @@ async function refetchAndPatchRow(mrId) {
         const mr = body.mr;
 
         const existingRow = refreshProgressRow(mrId);
-        // 404 / null: no longer cached or no longer open — drop the row and
+        // 404 / null: no longer cached or no longer open. A draft that the
+        // "Hide drafts" checkbox filters out is treated the same way, so a
+        // row that just became a draft disappears live. Drop the row and
         // refresh the count that renders it.
-        if (!mr) {
+        if (!mr || isDraftHidden(mr)) {
             if (existingRow) {
                 removeMrRow(existingRow);
             }
@@ -340,6 +344,28 @@ async function refetchAndPatchRow(mrId) {
     } catch {
         // Offline or the API is unreachable; the row keeps its last-known state.
     }
+}
+
+function readHideDrafts() {
+    try {
+        return window.localStorage.getItem(HIDE_DRAFTS_STORAGE_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function saveHideDrafts(hidden) {
+    try {
+        window.localStorage.setItem(HIDE_DRAFTS_STORAGE_KEY, hidden ? '1' : '0');
+    } catch {
+        // localStorage unavailable (private mode, etc.) — the in-memory value still works.
+    }
+}
+
+// The "Hide drafts" checkbox removes every draft MR from the list, including
+// drafts in the stale group. Applies to the full view and to "My view".
+function isDraftHidden(mr) {
+    return state.hideDrafts && mr.draft === true;
 }
 
 function readRefreshInterval() {
@@ -920,11 +946,12 @@ function renderStaleLink(staleMrs) {
 function renderMrList(data) {
     const container = document.getElementById('mr-list');
     container.textContent = '';
+    const mrs = data.mrs.filter((mr) => !isDraftHidden(mr));
 
     if (state.userId) {
         const mine = [];
         const toReview = [];
-        for (const mr of data.mrs) {
+        for (const mr of mrs) {
             if (String(mr.author.id) === state.userId) {
                 mine.push(mr);
             } else if (!mr.stale) {
@@ -942,7 +969,7 @@ function renderMrList(data) {
 
     const stale = [];
     const body = [];
-    for (const mr of data.mrs) {
+    for (const mr of mrs) {
         if (mr.stale) {
             stale.push(mr);
         } else {
@@ -1064,7 +1091,7 @@ function updateStaleLinkText(link, wrapper) {
 // view: the two "My view" sections, or the stale-group/body split.
 function spliceNewMrRow(mr) {
     const container = document.getElementById('mr-list');
-    if (!container) {
+    if (!container || isDraftHidden(mr)) {
         return;
     }
     const row = renderMrRow(mr, mr.stale === true);
@@ -1590,6 +1617,21 @@ document.addEventListener('DOMContentLoaded', () => {
             clear.hidden = true;
             setUrlUser(null);
             loadData(state.bucket);
+        });
+    }
+
+    const hideDrafts = document.getElementById('hide-drafts');
+    if (hideDrafts) {
+        hideDrafts.checked = state.hideDrafts;
+        hideDrafts.addEventListener('change', () => {
+            state.hideDrafts = hideDrafts.checked;
+            saveHideDrafts(state.hideDrafts);
+            // Re-render just the MR list from the data already on screen;
+            // the charts don't depend on the draft filter, so they keep
+            // their zoom and tooltips.
+            if (chartData) {
+                renderMrList(chartData);
+            }
         });
     }
 

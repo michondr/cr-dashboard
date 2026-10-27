@@ -209,6 +209,20 @@ body {
     color: var(--text);
 }
 
+.hide-drafts {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.hide-drafts input {
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
 .layout {
     display: flex;
     flex-direction: column;

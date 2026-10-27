@@ -355,6 +355,41 @@ test('my view filter splits the list into authored and awaiting review', async (
     expect(await page.locator('.mr-section').nth(1).locator('.status-stale').count()).toBe(0);
 });
 
+test('the "Hide drafts" checkbox filters draft MRs and persists across reloads', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    const checkbox = page.locator('#hide-drafts');
+    await expect(checkbox).not.toBeChecked();
+    expect(await page.locator('.col-state .status-draft').count()).toBeGreaterThanOrEqual(1);
+
+    await checkbox.check();
+    await expect(page.locator('.col-state .status-draft')).toHaveCount(0);
+    await expect(page.locator('.mr-row[data-mr-id="209"]')).toHaveCount(0);
+
+    // The preference is persisted, so a reload keeps drafts hidden.
+    await page.reload();
+    await page.waitForSelector('#mr-list > .mr-row');
+    await expect(page.locator('#hide-drafts')).toBeChecked();
+    await expect(page.locator('.mr-row[data-mr-id="209"]')).toHaveCount(0);
+
+    // Unchecking restores the draft row without a reload.
+    await page.locator('#hide-drafts').uncheck();
+    await expect(page.locator('.mr-row[data-mr-id="209"]')).toHaveCount(1);
+
+    // "My view" section counts follow the filter too.
+    await page.goto('/?user=1');
+    await page.waitForSelector('.mr-section');
+    const authored = page.locator('.mr-section', { hasText: 'Authored by me' });
+    const countInHeading = async () => {
+        const text = await authored.locator('.mr-section-heading').textContent();
+        return parseInt(text.match(/\((\d+)\)/)?.[1] ?? '0', 10);
+    };
+    await page.locator('#hide-drafts').check();
+    await expect(authored.locator('.mr-row[data-mr-id="209"]')).toHaveCount(0);
+    await expect.poll(countInHeading).toBe(await authored.locator('.mr-row').count());
+});
+
 test('a changed event drops an MR I just approved from "awaiting my review"', async ({ page, request }) => {
     await page.goto('/?user=2');
     await page.waitForSelector('.mr-section');
