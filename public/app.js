@@ -6,7 +6,28 @@ const REFRESH_MS = 60_000;
 const REFRESH_INTERVAL_STORAGE_KEY = 'cr-dashboard-refresh-interval';
 const REFRESH_INTERVAL_OPTIONS = [0, 60, 300, 900];
 const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
-const HIDE_DRAFTS_STORAGE_KEY = 'cr-dashboard-hide-drafts';
+
+// Frontend-only preference cookies. Unlike localStorage these travel with the
+// origin on every request and survive across subdomains/browsers sharing the
+// domain, so a returning visitor at cr.michondr.space gets their last filter
+// and draft setting back even after closing the tab.
+const USER_COOKIE = 'cr-user';
+const HIDE_DRAFTS_COOKIE = 'cr-hide-drafts';
+const COOKIE_MAX_AGE = 'max-age=31536000; path=/; samesite=lax';
+
+function cookieValue(name) {
+    const match = new RegExp(`(?:^|;\\s*)${name}=([^;]*)`).exec(document.cookie);
+
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setCookie(name, value) {
+    document.cookie = `${name}=${encodeURIComponent(value)}; ${COOKIE_MAX_AGE}`;
+}
+
+function deleteCookie(name) {
+    document.cookie = `${name}=; path=/; max-age=0; samesite=lax`;
+}
 
 const MERCURE_URL = '/.well-known/mercure';
 const SSE_ERROR_THRESHOLD = 3;
@@ -140,7 +161,7 @@ const METRICS = {
 
 let state = {
     bucket: 'day',
-    userId: readUserIdFromUrl(),
+    userId: readUserId(),
     hideDrafts: readHideDrafts(),
     focusedMetricKey: null,
     refreshIntervalSeconds: readRefreshInterval(),
@@ -347,19 +368,11 @@ async function refetchAndPatchRow(mrId) {
 }
 
 function readHideDrafts() {
-    try {
-        return window.localStorage.getItem(HIDE_DRAFTS_STORAGE_KEY) === '1';
-    } catch {
-        return false;
-    }
+    return cookieValue(HIDE_DRAFTS_COOKIE) === '1';
 }
 
 function saveHideDrafts(hidden) {
-    try {
-        window.localStorage.setItem(HIDE_DRAFTS_STORAGE_KEY, hidden ? '1' : '0');
-    } catch {
-        // localStorage unavailable (private mode, etc.) — the in-memory value still works.
-    }
+    setCookie(HIDE_DRAFTS_COOKIE, hidden ? '1' : '0');
 }
 
 // The "Hide drafts" checkbox removes every draft MR from the list, including
@@ -538,6 +551,29 @@ function colorForUser(id) {
 function readUserIdFromUrl() {
     const raw = new URLSearchParams(window.location.search).get('user');
     return raw && /^\d+$/.test(raw) ? raw : null;
+}
+
+// The "My view" filter is resolved in priority order: an explicit `?user=<id>`
+// in the URL wins (so bookmarked/shared links always reapply the filter), then
+// the last choice persisted in the cookie (so returning to the bare domain
+// restores the previous view). Whatever is resolved is persisted back to the
+// cookie so the bare-domain visit keeps working.
+function readUserId() {
+    const fromUrl = readUserIdFromUrl();
+    if (fromUrl) {
+        return fromUrl;
+    }
+    const fromCookie = cookieValue(USER_COOKIE);
+
+    return fromCookie && /^\d+$/.test(fromCookie) ? fromCookie : null;
+}
+
+function saveUserId(userId) {
+    if (userId) {
+        setCookie(USER_COOKIE, userId);
+    } else {
+        deleteCookie(USER_COOKIE);
+    }
 }
 
 function setUrlUser(userId) {
@@ -1605,6 +1641,7 @@ document.addEventListener('DOMContentLoaded', () => {
         select.addEventListener('change', () => {
             state.userId = select.value || null;
             setUrlUser(state.userId);
+            saveUserId(state.userId);
             loadData(state.bucket);
         });
     }
@@ -1616,9 +1653,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             clear.hidden = true;
             setUrlUser(null);
+            saveUserId(null);
             loadData(state.bucket);
         });
     }
+
+    // Persist the filter resolved on load (e.g. from a `?user=` link) so the
+    // bare-domain visit restores it; a resolved "Everyone" clears any stale
+    // cookie from a previous session.
+    saveUserId(state.userId);
 
     const hideDrafts = document.getElementById('hide-drafts');
     if (hideDrafts) {

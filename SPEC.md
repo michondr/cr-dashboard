@@ -92,9 +92,9 @@ The Jira ticket links to the Jira issue. The title links to the MR in a new tab 
 
 ### 2.3 My view filter
 
-A "My view" `<select>` in the header (right side) lists every known user (`Name @username`) plus an "Everyone" default. Picking a user adds `?user=<id>` to the URL and re-requests `/api/data` with that param, so the filtered view is bookmarkable — reloading the bookmark re-applies the filter. A "Clear" button next to the select removes the filter.
+A "My view" `<select>` in the header (right side) lists every known user (`Name @username`) plus an "Everyone" default. Picking a user adds `?user=<id>` to the URL and re-requests `/api/data` with that param, so the filtered view is bookmarkable — reloading the bookmark re-applies the filter. A "Clear" button next to the select removes the filter. The choice is also persisted in a `cr-user` cookie: an explicit `?user=<id>` link wins, but visiting the bare domain restores the last selection from the cookie, and any change writes back to it.
 
-A "Hide drafts" checkbox next to the select removes every draft MR from the list (both views, including drafts in the stale group); the section headings and the stale link byline count only the rows that remain. The choice is persisted in `localStorage` and applied locally without re-fetching, so charts keep their zoom.
+A "Hide drafts" checkbox next to the select removes every draft MR from the list (both views, including drafts in the stale group); the section headings and the stale link byline count only the rows that remain. The choice is persisted in a `cr-hide-drafts` cookie and applied locally without re-fetching, so charts keep their zoom.
 
 With a user selected the MR list splits into two labelled tables, separated by a heading bar:
 
