@@ -858,3 +858,39 @@ test('clicking a cell title expands it to focus mode; clicking again or Escape c
     await coverage.locator('.cell-title').click();
     await expect(coverage).not.toHaveClass(/focused/);
 });
+
+test('the "Hide graphs" button collapses the stats panel and persists across reloads', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.cell canvas');
+
+    const toggle = page.locator('#stats-toggle');
+    const panel = page.locator('#stats-panel');
+    const layout = page.locator('.layout');
+
+    // The panel starts visible and the button offers to hide it.
+    await expect(panel).toBeVisible();
+    await expect(toggle).toHaveText('Hide graphs');
+    await expect(layout).not.toHaveClass(/stats-collapsed/);
+
+    // Collapsing hides the panel, flips the button, and lets the MR list grow.
+    await toggle.click();
+    await expect(panel).toBeHidden();
+    await expect(toggle).toHaveText('Show graphs');
+    await expect(layout).toHaveClass(/stats-collapsed/);
+    const mrPanelHeight = await page.locator('.mr-panel').evaluate((el) => el.getBoundingClientRect().height);
+    expect(mrPanelHeight).toBeGreaterThan(600);
+
+    // The collapsed state is persisted, so a reload keeps the panel hidden.
+    await page.reload();
+    await page.waitForSelector('#mr-list > .mr-row');
+    await expect(panel).toBeHidden();
+    await expect(toggle).toHaveText('Show graphs');
+
+    // Expanding restores the panel and the charts re-render.
+    await toggle.click();
+    await expect(panel).toBeVisible();
+    await expect(toggle).toHaveText('Hide graphs');
+    await expect(layout).not.toHaveClass(/stats-collapsed/);
+    await page.waitForSelector('.cell canvas');
+    expect(await page.locator('.cell').count()).toBe(10);
+});

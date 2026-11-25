@@ -103,6 +103,8 @@ With a user selected the MR list splits into two labelled tables, separated by a
 
 MRs the selected user already approved are excluded. The metrics panel is unaffected (it stays a team-wide view). With no filter the list is the single open-MR list with the stale link as above.
 
+A "Hide graphs"/"Show graphs" button in the header collapses the statistics panel so the MR list fills the viewport, and restores it on the next click. The collapsed state is persisted in a `cr-stats-collapsed` cookie, so the choice survives reloads.
+
 ### 2.4 Metric cell
 
 ```

@@ -223,6 +223,22 @@ body {
     cursor: pointer;
 }
 
+.stats-toggle {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.stats-toggle:hover {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
 .layout {
     display: flex;
     flex-direction: column;
@@ -671,6 +687,20 @@ body {
     grid-auto-rows: 1fr;
     gap: 8px;
     padding: 8px;
+}
+
+/* Collapse the statistics graphs: hide the panel and let the MR list grow to
+   fill the viewport. The MR list's fixed 55% height is overridden so it takes
+   all the freed space, and its bottom border is dropped now that nothing sits
+   below it. */
+.layout.stats-collapsed .stats-panel {
+    display: none;
+}
+
+.layout.stats-collapsed .mr-panel {
+    height: auto;
+    flex: 1;
+    border-bottom: none;
 }
 
 .cell {

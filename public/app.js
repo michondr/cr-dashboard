@@ -13,6 +13,7 @@ const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
 // and draft setting back even after closing the tab.
 const USER_COOKIE = 'cr-user';
 const HIDE_DRAFTS_COOKIE = 'cr-hide-drafts';
+const STATS_COLLAPSED_COOKIE = 'cr-stats-collapsed';
 const COOKIE_MAX_AGE = 'max-age=31536000; path=/; samesite=lax';
 
 function cookieValue(name) {
@@ -163,6 +164,7 @@ let state = {
     bucket: 'day',
     userId: readUserId(),
     hideDrafts: readHideDrafts(),
+    statsCollapsed: readStatsCollapsed(),
     focusedMetricKey: null,
     refreshIntervalSeconds: readRefreshInterval(),
     refreshDeadline: null,
@@ -373,6 +375,28 @@ function readHideDrafts() {
 
 function saveHideDrafts(hidden) {
     setCookie(HIDE_DRAFTS_COOKIE, hidden ? '1' : '0');
+}
+
+function readStatsCollapsed() {
+    return cookieValue(STATS_COLLAPSED_COOKIE) === '1';
+}
+
+function saveStatsCollapsed(collapsed) {
+    setCookie(STATS_COLLAPSED_COOKIE, collapsed ? '1' : '0');
+}
+
+// Collapses (or restores) the statistics graphs panel. Toggling a class on the
+// layout lets CSS hide the panel and grow the MR list to fill the freed space;
+// the button label flips to tell the user what the next click does.
+function applyStatsCollapsed() {
+    const layout = document.querySelector('.layout');
+    if (layout) {
+        layout.classList.toggle('stats-collapsed', state.statsCollapsed);
+    }
+    const toggle = document.getElementById('stats-toggle');
+    if (toggle) {
+        toggle.textContent = state.statsCollapsed ? 'Show graphs' : 'Hide graphs';
+    }
 }
 
 // The "Hide drafts" checkbox removes every draft MR from the list, including
@@ -1675,6 +1699,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chartData) {
                 renderMrList(chartData);
             }
+        });
+    }
+
+    applyStatsCollapsed();
+    const statsToggle = document.getElementById('stats-toggle');
+    if (statsToggle) {
+        statsToggle.addEventListener('click', () => {
+            state.statsCollapsed = !state.statsCollapsed;
+            saveStatsCollapsed(state.statsCollapsed);
+            applyStatsCollapsed();
+            // Charts were laid out while the panel was hidden (zero-width
+            // cells, so uPlot fell back to 320px). On expand each cell's
+            // ResizeObserver (set up in createChart) fires with the real
+            // width and resizes the chart, so no manual nudge is needed.
         });
     }
 
