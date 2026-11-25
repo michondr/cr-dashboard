@@ -258,7 +258,7 @@ body {
 .mr-header,
 .mr-row {
     display: grid;
-    grid-template-columns: 60px 110px minmax(220px, 1fr) minmax(90px, 140px) 150px 288px 110px 100px 120px 44px 90px;
+    grid-template-columns: 60px 110px minmax(220px, 1fr) minmax(90px, 140px) 150px 288px 110px 100px 120px 44px 90px 80px;
     column-gap: 12px;
     align-items: center;
     padding: 4px 16px;
@@ -677,6 +677,29 @@ body {
     font-size: 13px;
 }
 
+/* Per-MR line changes: additions in green, deletions in red, mono so the
+   digits line up across rows. */
+.col-changes {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.changes-add {
+    color: var(--ok);
+}
+
+.changes-del {
+    color: var(--fail);
+}
+
+.changes-none {
+    color: var(--text-dim);
+}
+
 /* ---------- user stats ---------- */
 
 .stats-panel {
@@ -974,6 +997,6 @@ body {
 
     .mr-header,
     .mr-row {
-        grid-template-columns: 60px 110px minmax(220px, 360px) minmax(90px, 140px) 150px 288px 110px 100px 120px 44px 90px;
+        grid-template-columns: 60px 110px minmax(220px, 360px) minmax(90px, 140px) 150px 288px 110px 100px 120px 44px 90px 80px;
     }
 }

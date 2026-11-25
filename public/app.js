@@ -983,6 +983,23 @@ function renderMrRow(mr, dimmed) {
     commits.appendChild(commitButton);
     row.appendChild(commits);
 
+    // Per-MR line changes (+additions / -deletions) summed over the current
+    // commits. Null when no commit stats are cached yet; show an em dash then.
+    const changes = el('span', 'col-changes');
+    if (mr.additions == null && mr.deletions == null) {
+        const dash = el('span', 'changes-none');
+        dash.textContent = '—';
+        changes.appendChild(dash);
+    } else {
+        const add = el('span', 'changes-add');
+        add.textContent = `+${mr.additions ?? 0}`;
+        const del = el('span', 'changes-del');
+        del.textContent = `-${mr.deletions ?? 0}`;
+        changes.appendChild(add);
+        changes.appendChild(del);
+    }
+    row.appendChild(changes);
+
     return row;
 }
 

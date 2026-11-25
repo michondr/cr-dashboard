@@ -215,6 +215,8 @@ final class ApiBuilder
      *   time_to_first_approval_seconds: int|null,
      *   commit_count: int,
      *   commit_diff_urls: list<string>,
+     *   additions: int|null,
+     *   deletions: int|null,
      *   pipeline: array{status: string, indicator: string, tint: string|null},
      *   approvers: list<array{
      *     id: int, name: string, username: string, avatar_url: string|null, approved_at: string|null
@@ -254,6 +256,12 @@ final class ApiBuilder
             );
         }
 
+        // Per-MR line changes shown in the row: sum the cached commit stats
+        // over the current commit set (the same set `mr_size` averages per
+        // author). Null when no current commit has stats yet — stats are
+        // fetched once per sha on sync, so a freshly-seeded MR may lack them.
+        $commitStats = $this->currentCommitStats($dataset, $id);
+
         $pipeline = $this->pipelineFor($dataset, $id);
         $approvers = $this->approversFor($dataset, $id);
         $unresolvedDiscussions = $this->unresolvedDiscussionCount($dataset, $id);
@@ -283,6 +291,8 @@ final class ApiBuilder
             'time_to_first_approval_seconds' => $this->firstApprovalSeconds($dataset, $id, $createdAt),
             'commit_count' => count($commitShas),
             'commit_diff_urls' => $commitDiffUrls,
+            'additions' => $commitStats['additions'],
+            'deletions' => $commitStats['deletions'],
             'pipeline' => $pipeline,
             'approvers' => $approvers,
             'needs_rebase' => $needsRebase,
@@ -459,6 +469,36 @@ final class ApiBuilder
         }
 
         return $shas;
+    }
+
+    /**
+     * Sum of cached additions/deletions over the MR's current commits. Both
+     * are null when no current commit carries stats yet.
+     *
+     * @return array{additions: int|null, deletions: int|null}
+     */
+    private function currentCommitStats(Dataset $dataset, int $mrId): array
+    {
+        $additions = 0;
+        $deletions = 0;
+        $hasStats = false;
+        foreach ($dataset->commits as $commit) {
+            if ((int) $commit['merge_request_id'] !== $mrId) {
+                continue;
+            }
+            if ((int) $commit['current'] !== 1) {
+                continue;
+            }
+            if ($commit['additions'] !== null || $commit['deletions'] !== null) {
+                $hasStats = true;
+            }
+            $additions += (int) ($commit['additions'] ?? 0);
+            $deletions += (int) ($commit['deletions'] ?? 0);
+        }
+
+        return $hasStats
+            ? ['additions' => $additions, 'deletions' => $deletions]
+            : ['additions' => null, 'deletions' => null];
     }
 
     /**

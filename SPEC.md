@@ -74,17 +74,18 @@ Columns, left to right:
 | 9 | Approvers | `(av)(av)` | Avatars of everyone who approved, earliest first, slightly overlapping. |
 | 10 | Pipeline | `[sp]` / `[ok]` / `[!!]` | Spinner while running (red if a finished job failed, orange if a job warned), green check on success, red on failure, neutral on canceled/skipped/manual. |
 | 11 | Commits | `[3 commits]` | Link opens one new tab per current commit diff. |
+| 12 | Changes | `+42 -7` | Sum of additions (green) and deletions (red) over the MR's current commits, from the per-sha commit stats cached on sync. `—` when no commit stats are available yet. |
 
 Widescreen layout (top header row, then sample open MRs):
 
 ```
-+---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
-| Project | Jira   | Title              | Description (coll. ~140px)  | Author  | Status    | Age     | 1st App | Approvers | Pipe   | Commits|
-+---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
-| (av)    | REC-…  | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | ready     | 3d04:12 | (av)1d  | (av)(av)  | [sp]   | [2comm]|
-| (av)    |        | Fix bug Y          | Consectetur adipiscing…     | (av) JR | stale 💩 | 5d02:00 | (av)0d  | (av)      | [ok]   | [1comm]|
-| (av)    |        | Refactor Z         | Dolor sit amet consectetur… | (av) AB | approved | 2d01:00 | (av)1d  | (av)(av)  | [!!]   | [4comm]|
-+---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+
++---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+--------+
+| Project | Jira   | Title              | Description (coll. ~140px)  | Author  | Status    | Age     | 1st App | Approvers | Pipe   | Commits| Changes|
++---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+--------+
+| (av)    | REC-…  | Add feature X      | Lorem ipsum dolor sit amet… | (av) JD | ready     | 3d04:12 | (av)1d  | (av)(av)  | [sp]   | [2comm]| +42 -7 |
+| (av)    |        | Fix bug Y          | Consectetur adipiscing…     | (av) JR | stale 💩 | 5d02:00 | (av)0d  | (av)      | [ok]   | [1comm]| +8 -2  |
+| (av)    |        | Refactor Z         | Dolor sit amet consectetur… | (av) AB | approved | 2d01:00 | (av)1d  | (av)(av)  | [!!]   | [4comm]| —      |
++---------+--------+--------------------+-----------------------------+---------+-----------+----------+---------+-----------+--------+--------+--------+
 ```
 ```
 

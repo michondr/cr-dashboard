@@ -150,6 +150,11 @@ final class ApiContractTest extends TestCase
         self::assertSame(self::DAY, $openMr['time_to_first_approval_seconds']);
         self::assertSame(1, $openMr['commit_count']);
 
+        // Per-MR line changes are the sum of the cached per-sha commit stats
+        // over the current commit set (MR 101 has one commit: +10 -2).
+        self::assertSame(10, $openMr['additions']);
+        self::assertSame(2, $openMr['deletions']);
+
         $diffUrls = $openMr['commit_diff_urls'];
         self::assertIsArray($diffUrls);
         self::assertCount(1, $diffUrls);

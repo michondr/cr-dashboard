@@ -120,6 +120,28 @@ test('dashboard renders MRs, stale link and metric cells without console errors'
     expect(errors).toEqual([]);
 });
 
+test('the Changes column shows per-MR +/- line deltas from the commit stats', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#mr-list > .mr-row');
+
+    // The header has a Changes column and every row has a changes cell.
+    expect(await page.locator('.mr-header .col-changes').count()).toBe(1);
+    expect(await page.locator('.mr-row .col-changes').count()).toBeGreaterThan(0);
+
+    // MR 201 has one commit cached with +120 -30.
+    const row201 = page.locator('.mr-row[data-mr-id="201"]');
+    await expect(row201.locator('.col-changes')).toContainText('+120');
+    await expect(row201.locator('.col-changes')).toContainText('-30');
+    expect(await row201.locator('.changes-add').count()).toBe(1);
+    expect(await row201.locator('.changes-del').count()).toBe(1);
+
+    // MRs whose commits have no cached stats yet render an em dash, not a
+    // bogus +0 -0.
+    const row205 = page.locator('.mr-row[data-mr-id="205"]');
+    await expect(row205.locator('.col-changes')).toContainText('—');
+    expect(await row205.locator('.changes-add').count()).toBe(0);
+});
+
 test('the header shows a refresh-interval segmented control with a live countdown', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#mr-list > .mr-row');
@@ -259,6 +281,8 @@ test('a changed event for an unknown MR splices its row in live, sorted, with no
             time_to_first_approval_seconds: null,
             commit_count: 1,
             commit_diff_urls: [],
+            additions: 50,
+            deletions: 5,
             pipeline: { status: 'success', indicator: 'check', tint: null },
             approvers: [],
             needs_rebase: false,
